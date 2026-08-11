@@ -5,10 +5,7 @@
 // =============================================================================
 
 // ---------- Configuração ----------
-// PLACEHOLDER: troque pela URL base real do webhook do n8n quando o workflow
-// da API estiver publicado (ex.: https://SEU-N8N/webhook).
-const API_BASE = 'https://webhook.prod.advocaciaescalaveldev.shop/webhook/painel-ae-metricas';
-// PLACEHOLDER: mesma chave configurada nos nodes "...Autorizado?" da API.
+const API_BASE = 'https://webhook.prod.advocaciaescalaveldev.shop/webhook';
 const API_KEY = 'vigia-ae-k7x9mP2qL8wZ4nR1';
 
 // PLACEHOLDER: mapeamento de ID de departamento do Bitrix24 para setor do
