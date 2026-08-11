@@ -1,21 +1,34 @@
 // =============================================================================
 // app.js — Painel Vigia (Advocacia Escalável)
 // Consome a API do n8n (workflow "Painel - Vigia - Advocacia Escalável - API")
-// e renderiza métricas + tabela de atendimentos dentro do iframe do Bitrix24.
+// e renderiza métricas + auditoria dentro do iframe do Bitrix24.
 // =============================================================================
 
 // ---------- Configuração ----------
 // PLACEHOLDER: troque pela URL base real do webhook do n8n quando o workflow
 // da API estiver publicado (ex.: https://SEU-N8N/webhook).
-const API_BASE = 'PLACEHOLDER_URL_BASE_N8N/webhook';
+const API_BASE = 'https://webhook.prod.advocaciaescalaveldev.shop/webhook/painel-ae-metricas';
 // PLACEHOLDER: mesma chave configurada nos nodes "...Autorizado?" da API.
-const API_KEY = 'PLACEHOLDER_CHAVE_COMPARTILHADA_PAINEL';
+const API_KEY = 'vigia-ae-k7x9mP2qL8wZ4nR1';
+
+// PLACEHOLDER: mapeamento de ID de departamento do Bitrix24 para setor do
+// painel. Preencha com os IDs reais (Bitrix24 → Empresa → Estrutura da
+// empresa). Enquanto estiver vazio, o painel libera todos os setores e avisa
+// na sidebar, em vez de bloquear silenciosamente o acesso de todo mundo.
+const DEPARTAMENTOS_SETOR = {
+  // 'ID_DEPARTAMENTO_COMERCIAL': 'comercial',
+  // 'ID_DEPARTAMENTO_SUPORTE': 'suporte',
+};
 
 const TEMA_STORAGE_KEY = 'ae-tema:painel-vigia-ae';
 
 const estado = {
   tipologia: '',
-  dias: 30,
+  secao: 'metricas',
+  modoData: 'dia',
+  valorDia: new Date().toISOString().slice(0, 10),
+  valorMes: new Date().toISOString().slice(0, 7),
+  valorAno: new Date().getFullYear(),
   pagina: 1,
   limite: 25
 };
@@ -23,7 +36,27 @@ const estado = {
 const nf = new Intl.NumberFormat('pt-BR');
 const df = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 
-// ---------- Logo (injeta os SVGs da marca) ----------
+// ---------- Cálculo do período (dia | mês | ano → desde/ate ISO) ----------
+function calcularPeriodo() {
+  let inicio, fim;
+
+  if (estado.modoData === 'dia') {
+    const [ano, mes, dia] = estado.valorDia.split('-').map(Number);
+    inicio = new Date(ano, mes - 1, dia, 0, 0, 0, 0);
+    fim = new Date(ano, mes - 1, dia, 23, 59, 59, 999);
+  } else if (estado.modoData === 'mes') {
+    const [ano, mes] = estado.valorMes.split('-').map(Number);
+    inicio = new Date(ano, mes - 1, 1, 0, 0, 0, 0);
+    fim = new Date(ano, mes, 0, 23, 59, 59, 999); // último dia do mês
+  } else {
+    inicio = new Date(estado.valorAno, 0, 1, 0, 0, 0, 0);
+    fim = new Date(estado.valorAno, 11, 31, 23, 59, 59, 999);
+  }
+
+  return { desde: inicio.toISOString(), ate: fim.toISOString() };
+}
+
+// ---------- Logo ----------
 async function carregarLogos() {
   try {
     const [completo, isotipo] = await Promise.all([
@@ -34,7 +67,6 @@ async function carregarLogos() {
     document.getElementById('logo-rodape').innerHTML = completo;
     document.getElementById('logo-isotipo').innerHTML = isotipo;
   } catch (e) {
-    // Se os SVGs não carregarem, o app segue funcional sem o logo.
     console.warn('Não foi possível carregar os SVGs da marca.', e);
   }
 }
@@ -56,10 +88,58 @@ function alternarTema() {
   aplicarTema(atual === 'claro' ? 'escuro' : 'claro');
 }
 
+// ---------- Permissão por departamento (Bitrix24) ----------
+// Mostra/oculta as abas de setor na sidebar de acordo com o departamento do
+// usuário logado. Se DEPARTAMENTOS_SETOR estiver vazio (ainda não
+// configurado), libera tudo e avisa, em vez de travar o acesso de todos.
+function aplicarPermissoesSetor(departamentosUsuario) {
+  const mapeamentoConfigurado = Object.keys(DEPARTAMENTOS_SETOR).length > 0;
+  const avisoEl = document.getElementById('aviso-permissao');
+
+  if (!mapeamentoConfigurado) {
+    document.querySelectorAll('.ae-sidebar__item[data-tipologia]').forEach(el => { el.hidden = false; });
+    avisoEl.hidden = false;
+    return;
+  }
+
+  avisoEl.hidden = true;
+  const setoresPermitidos = new Set(
+    (departamentosUsuario || [])
+      .map(id => DEPARTAMENTOS_SETOR[String(id)])
+      .filter(Boolean)
+  );
+
+  document.querySelectorAll('.ae-sidebar__item[data-tipologia]').forEach(el => {
+    const setor = el.dataset.tipologia;
+    if (setor === '') { el.hidden = false; return; } // "Todos" continua visível
+    el.hidden = !setoresPermitidos.has(setor);
+  });
+
+  // Se o setor ativo no momento não é mais permitido, volta para "Todos".
+  const ativoAtual = document.querySelector('.ae-sidebar__item.is-ativo');
+  if (ativoAtual && ativoAtual.hidden) {
+    selecionarSetor('');
+  }
+}
+
+function verificarPermissoes() {
+  if (!window.BX24 || !BX24.callMethod) {
+    aplicarPermissoesSetor([]);
+    return;
+  }
+  BX24.callMethod('user.current', {}, (resultado) => {
+    if (resultado.error()) {
+      console.warn('Não foi possível obter o usuário atual do Bitrix24.', resultado.error());
+      aplicarPermissoesSetor([]);
+      return;
+    }
+    const dados = resultado.data() || {};
+    aplicarPermissoesSetor(dados.UF_DEPARTMENT || []);
+  });
+}
+
 // ---------- Chamadas à API ----------
 async function chamarApi(path, params) {
-  const url = new URL(API_BASE.replace(/\/$/, '') + '/' + path, window.location.href.startsWith('http') ? undefined : 'https://placeholder.invalid');
-  // Monta query string manualmente para funcionar mesmo com API_BASE absoluta ou relativa.
   const query = new URLSearchParams(params).toString();
   const urlFinal = API_BASE.replace(/\/$/, '') + '/' + path + (query ? '?' + query : '');
 
@@ -76,9 +156,7 @@ async function chamarApi(path, params) {
 
 // ---------- Renderização: KPIs ----------
 function renderizarKpis(m) {
-  document.getElementById('kpi-score').textContent = m.score_efetividade_medio != null
-    ? nf.format(m.score_efetividade_medio)
-    : '—';
+  document.getElementById('kpi-score').textContent = m.score_efetividade_medio != null ? nf.format(m.score_efetividade_medio) : '—';
   document.getElementById('kpi-abertos').textContent = nf.format(m.em_aberto || 0);
   document.getElementById('kpi-concluidos').textContent = nf.format(m.concluidos || 0);
   document.getElementById('kpi-falha-critica').textContent = nf.format(m.com_falha_critica || 0);
@@ -110,8 +188,8 @@ function renderizarVazio() {
   td.colSpan = 7;
   td.innerHTML = `
     <div class="ae-vazio">
-      <p class="ae-corpo">Nenhum atendimento encontrado nesse período com esses filtros.</p>
-      <p class="ae-apoio">Tente ampliar o período ou trocar o filtro de setor.</p>
+      <p class="ae-corpo">Nenhum atendimento avaliado nesse período com esses filtros.</p>
+      <p class="ae-apoio">Tente outro dia, mês ou ano, ou trocar o setor.</p>
     </div>`;
   tr.appendChild(td);
   corpo.appendChild(tr);
@@ -137,13 +215,11 @@ function badgeSetor(tipologia) {
   if (tipologia === 'suporte') return '<span class="ae-badge">Suporte</span>';
   return '<span class="ae-badge">—</span>';
 }
-
 function badgeStatus(item) {
   return item.finished_at
     ? '<span class="ae-badge ae-badge--ok">Concluído</span>'
     : '<span class="ae-badge ae-badge--alerta">Em aberto</span>';
 }
-
 function sinais(item) {
   const chips = [];
   if (item.falha_critica) chips.push('<span class="ae-badge ae-badge--erro" title="' + item.falha_critica + '">Falha crítica</span>');
@@ -190,7 +266,6 @@ function renderizarPaginacao(dados) {
   if (btnProx) btnProx.addEventListener('click', () => { estado.pagina++; carregarAtendimentos(); });
 }
 
-// ---------- Toast de erro ----------
 function mostrarToast(mensagem) {
   const existente = document.querySelector('.ae-toast');
   if (existente) existente.remove();
@@ -203,9 +278,10 @@ function mostrarToast(mensagem) {
 
 // ---------- Carregamento de dados ----------
 async function carregarMetricas() {
+  const { desde, ate } = calcularPeriodo();
   try {
     const m = await chamarApi('painel-ae-metricas', {
-      dias: estado.dias,
+      desde, ate,
       ...(estado.tipologia ? { tipologia: estado.tipologia } : {})
     });
     renderizarKpis(m);
@@ -217,8 +293,10 @@ async function carregarMetricas() {
 
 async function carregarAtendimentos() {
   renderizarSkeleton();
+  const { desde, ate } = calcularPeriodo();
   try {
     const dados = await chamarApi('painel-ae-atendimentos', {
+      desde, ate,
       limite: estado.limite,
       pagina: estado.pagina,
       ...(estado.tipologia ? { tipologia: estado.tipologia } : {})
@@ -232,35 +310,97 @@ async function carregarAtendimentos() {
 }
 
 async function atualizarTudo() {
-  await Promise.all([carregarMetricas(), carregarAtendimentos()]);
+  if (estado.secao === 'metricas') {
+    await carregarMetricas();
+  } else {
+    await carregarAtendimentos();
+  }
   if (window.BX24) BX24.fitWindow();
 }
 
-// ---------- Ligação dos filtros ----------
-function ligarFiltros() {
-  document.querySelectorAll('.ae-abas__item').forEach(botao => {
+// ---------- Navegação: setor (sidebar) ----------
+function selecionarSetor(tipologia) {
+  document.querySelectorAll('.ae-sidebar__item').forEach(b => {
+    const ativo = b.dataset.tipologia === tipologia;
+    b.classList.toggle('is-ativo', ativo);
+    b.setAttribute('aria-current', ativo ? 'true' : 'false');
+  });
+  estado.tipologia = tipologia;
+  estado.pagina = 1;
+  atualizarTudo();
+}
+
+// ---------- Navegação: seção (Métricas x Auditoria) ----------
+function selecionarSecao(secao) {
+  document.querySelectorAll('.ae-conteudo > .ae-abas .ae-abas__item').forEach(b => {
+    const ativo = b.dataset.secao === secao;
+    b.classList.toggle('is-ativo', ativo);
+    b.setAttribute('aria-selected', ativo ? 'true' : 'false');
+  });
+  document.getElementById('secao-metricas').hidden = secao !== 'metricas';
+  document.getElementById('secao-auditoria').hidden = secao !== 'auditoria';
+  estado.secao = secao;
+  atualizarTudo();
+}
+
+// ---------- Filtro de data ----------
+function atualizarVisibilidadeInputsData() {
+  document.getElementById('filtro-dia').hidden = estado.modoData !== 'dia';
+  document.getElementById('filtro-mes').hidden = estado.modoData !== 'mes';
+  document.getElementById('filtro-ano').hidden = estado.modoData !== 'ano';
+}
+
+function popularSelectAno() {
+  const select = document.getElementById('filtro-ano');
+  const anoAtual = new Date().getFullYear();
+  select.innerHTML = '';
+  for (let ano = anoAtual; ano >= anoAtual - 5; ano--) {
+    const opt = document.createElement('option');
+    opt.value = String(ano);
+    opt.textContent = String(ano);
+    select.appendChild(opt);
+  }
+  select.value = String(estado.valorAno);
+}
+
+function ligarFiltroData() {
+  document.getElementById('filtro-dia').value = estado.valorDia;
+  document.getElementById('filtro-mes').value = estado.valorMes;
+  popularSelectAno();
+  atualizarVisibilidadeInputsData();
+
+  document.querySelectorAll('.ae-chip-group .ae-chip').forEach(botao => {
     botao.addEventListener('click', () => {
-      document.querySelectorAll('.ae-abas__item').forEach(b => {
-        b.classList.remove('is-ativo');
-        b.setAttribute('aria-selected', 'false');
-      });
+      document.querySelectorAll('.ae-chip-group .ae-chip').forEach(b => b.classList.remove('is-ativo'));
       botao.classList.add('is-ativo');
-      botao.setAttribute('aria-selected', 'true');
-      estado.tipologia = botao.dataset.tipologia || '';
-      estado.pagina = 1;
+      estado.modoData = botao.dataset.modo;
+      atualizarVisibilidadeInputsData();
       atualizarTudo();
     });
   });
 
-  document.querySelectorAll('.ae-filtros__periodo .ae-chip').forEach(botao => {
-    botao.addEventListener('click', () => {
-      document.querySelectorAll('.ae-filtros__periodo .ae-chip').forEach(b => b.classList.remove('is-ativo'));
-      botao.classList.add('is-ativo');
-      estado.dias = Number(botao.dataset.dias);
-      atualizarTudo();
-    });
+  document.getElementById('filtro-dia').addEventListener('change', (e) => {
+    estado.valorDia = e.target.value;
+    atualizarTudo();
   });
+  document.getElementById('filtro-mes').addEventListener('change', (e) => {
+    estado.valorMes = e.target.value;
+    atualizarTudo();
+  });
+  document.getElementById('filtro-ano').addEventListener('change', (e) => {
+    estado.valorAno = Number(e.target.value);
+    atualizarTudo();
+  });
+}
 
+// ---------- Ligação geral ----------
+function ligarNavegacao() {
+  document.querySelectorAll('.ae-sidebar__item').forEach(botao => {
+    botao.addEventListener('click', () => selecionarSetor(botao.dataset.tipologia || ''));
+  });
+  document.querySelectorAll('.ae-conteudo > .ae-abas .ae-abas__item').forEach(botao => {
+    botao.addEventListener('click', () => selecionarSecao(botao.dataset.secao));
+  });
   document.getElementById('btn-atualizar').addEventListener('click', atualizarTudo);
   document.getElementById('btn-tema').addEventListener('click', alternarTema);
   document.getElementById('btn-tema-compacto').addEventListener('click', alternarTema);
@@ -271,7 +411,9 @@ function iniciar() {
   ajustarCabecalho();
   window.addEventListener('resize', ajustarCabecalho);
   carregarLogos();
-  ligarFiltros();
+  ligarNavegacao();
+  ligarFiltroData();
+  verificarPermissoes();
   atualizarTudo();
 }
 
@@ -281,6 +423,5 @@ if (window.BX24) {
     BX24.fitWindow();
   });
 } else {
-  // Permite abrir o arquivo fora do Bitrix24 durante o desenvolvimento local.
   document.addEventListener('DOMContentLoaded', iniciar);
 }
