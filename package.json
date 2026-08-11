@@ -1,0 +1,9 @@
+{
+  "name": "painel-vigia-advocacia-escalavel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Painel do Vigia da Advocacia Escalável — app Bitrix24 (frontend estático + serverless de OAuth)",
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR" data-tema="claro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel Vigia — Advocacia Escalável</title>
+
+<script>
+  // Aplica o tema salvo antes da primeira pintura, senão pisca branco/escuro.
+  try {
+    var t = localStorage.getItem('ae-tema:painel-vigia-ae');
+    if (t) document.documentElement.setAttribute('data-tema', t);
+  } catch (e) {}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@100..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ae-brand.css">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+<body>
+<div class="ae-app">
+
+  <!-- ===== Cabeçalho largo (aba própria / slider) ===== -->
+  <header class="ae-cabecalho" id="cabecalho-largo">
+    <div class="ae-cabecalho__marca">
+      <span class="ae-logo ae-logo--completo" aria-label="Advocacia Escalável" id="logo-completo"></span>
+      <span class="ae-produto__sep" aria-hidden="true"></span>
+      <span class="ae-produto__nome">PAINEL <b>VIGIA</b></span>
+    </div>
+    <div class="ae-cabecalho__contexto">
+      <h1 class="ae-titulo-app">Supervisão de atendimentos — Sofia</h1>
+      <p class="ae-apoio">Advocacia Escalável</p>
+    </div>
+    <div class="ae-cabecalho__acoes">
+      <button class="ae-btn" id="btn-atualizar" type="button" aria-label="Atualizar dados">
+        ↻ Atualizar
+      </button>
+      <button class="ae-btn" id="btn-tema" type="button" aria-label="Alternar tema claro/escuro">
+        ◐ Tema
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== Cabeçalho compacto (placement estreito, < 700px) ===== -->
+  <header class="ae-cabecalho ae-cabecalho--compacto" id="cabecalho-compacto" hidden>
+    <span class="ae-logo ae-logo--isotipo" aria-label="Advocacia Escalável" id="logo-isotipo"></span>
+    <h1 class="ae-titulo-secao">Vigia — Atendimentos</h1>
+    <button class="ae-btn" id="btn-tema-compacto" type="button" aria-label="Alternar tema claro/escuro" style="margin-left:auto">◐</button>
+  </header>
+
+  <!-- ===== Fita de marca ===== -->
+  <div class="ae-fita" style="margin-bottom:20px"></div>
+
+  <!-- ===== Filtros ===== -->
+  <div class="ae-filtros">
+    <div class="ae-abas" role="tablist" aria-label="Filtrar por setor">
+      <button class="ae-abas__item is-ativo" data-tipologia="" role="tab" aria-selected="true">Todos</button>
+      <button class="ae-abas__item" data-tipologia="comercial" role="tab" aria-selected="false">Comercial</button>
+      <button class="ae-abas__item" data-tipologia="suporte" role="tab" aria-selected="false">Suporte</button>
+    </div>
+    <div class="ae-filtros__periodo">
+      <button class="ae-chip" data-dias="7">7 dias</button>
+      <button class="ae-chip is-ativo" data-dias="30">30 dias</button>
+      <button class="ae-chip" data-dias="90">90 dias</button>
+    </div>
+  </div>
+
+  <!-- ===== KPIs ===== -->
+  <section class="ae-kpis" id="kpis" aria-label="Métricas do período">
+    <div class="ae-card ae-kpi-card">
+      <span class="ae-rotulo">Score de efetividade médio</span>
+      <span class="ae-numero ae-kpi" id="kpi-score">—</span>
+    </div>
+    <div class="ae-card ae-kpi-card">
+      <span class="ae-rotulo">Em aberto</span>
+      <span class="ae-numero ae-kpi" id="kpi-abertos">—</span>
+    </div>
+    <div class="ae-card ae-kpi-card">
+      <span class="ae-rotulo">Concluídos</span>
+      <span class="ae-numero ae-kpi" id="kpi-concluidos">—</span>
+    </div>
+    <div class="ae-card ae-kpi-card ae-kpi-card--alerta">
+      <span class="ae-rotulo">Com falha crítica</span>
+      <span class="ae-numero ae-kpi" id="kpi-falha-critica">—</span>
+    </div>
+    <div class="ae-card ae-kpi-card ae-kpi-card--alerta">
+      <span class="ae-rotulo">Sem resposta 30min (agora)</span>
+      <span class="ae-numero ae-kpi" id="kpi-sem-resposta">—</span>
+    </div>
+    <div class="ae-card ae-kpi-card ae-kpi-card--alerta">
+      <span class="ae-rotulo">Insatisfação não escalada</span>
+      <span class="ae-numero ae-kpi" id="kpi-insatisfacao">—</span>
+    </div>
+  </section>
+
+  <!-- ===== Tabela ===== -->
+  <section class="ae-card" style="padding:0; overflow:hidden">
+    <div class="ae-tabela-wrap" id="tabela-wrap">
+      <table class="ae-tabela">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Setor</th>
+            <th>Início</th>
+            <th>Status</th>
+            <th>Score</th>
+            <th>Falha crítica</th>
+            <th>Sinais</th>
+          </tr>
+        </thead>
+        <tbody id="tabela-corpo">
+          <!-- linhas fantasma / dados / estado vazio entram aqui via app.js -->
+        </tbody>
+      </table>
+    </div>
+    <div class="ae-paginacao" id="paginacao"></div>
+  </section>
+
+  <footer class="ae-rodape">
+    <span class="ae-apoio">Desenvolvido por</span>
+    <span class="ae-logo ae-logo--completo" style="height:16px" aria-label="Advocacia Escalável" id="logo-rodape"></span>
+  </footer>
+
+</div>
+
+<script src="//api.bitrix24.com/api/v1/"></script>
+<script src="app.js"></script>
+</body>
+</html>

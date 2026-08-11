@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/install", "destination": "/api/install.js" },
+    { "source": "/api/callback", "destination": "/api/callback.js" }
+  ]
+}
