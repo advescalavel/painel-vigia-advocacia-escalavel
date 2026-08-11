@@ -28,6 +28,14 @@ Aplicação da skill `marca-advocacia-escalavel-bitrix24` neste app.
 - **KPIs de alerta** (falha crítica, sem resposta, insatisfação não escalada) usam `--ae-pink-ink` no número para se destacarem sem ferir contraste — não usam `--ae-magic-pink` puro como texto.
 - **Tema escuro**: habilitado via alternador (`data-tema`), persistido em `localStorage` com chave `ae-tema:painel-vigia-ae`, sem seguir `prefers-color-scheme` do sistema, conforme a regra da skill.
 
+## Segunda rodada — ajustes de estrutura (não são de marca, mas afetam o layout)
+
+- **Sidebar de setores**: as abas Todos/Comercial/Suporte saíram do topo e foram para uma coluna fixa à esquerda (`.ae-sidebar`), com indicador de item ativo em Magic Pink na borda esquerda. Em telas <700px a sidebar vira uma faixa horizontal rolável, para não competir com a área de conteúdo.
+- **Permissão por departamento**: `DEPARTAMENTOS_SETOR` em `app.js` é o mapeamento ID de departamento Bitrix24 → setor. Enquanto estiver vazio (placeholder), o painel libera todos os setores e mostra um aviso na sidebar, em vez de bloquear o acesso de todo mundo por padrão — decisão deliberada para não travar o rollout por falta de configuração. Preencha os IDs reais assim que possível.
+- **Métricas x Auditoria**: virou uma navegação de abas própria dentro da área de conteúdo (`.ae-conteudo > .ae-abas`), separada da sidebar de setores. Cada seção dispara sua própria chamada à API só quando está ativa.
+- **Filtro de data**: trocado de "7/30/90 dias" para seleção exata de dia (`<input type="date">`), mês (`<input type="month">`) ou ano (`<select>`), nunca os três ao mesmo tempo — o modo ativo decide qual input aparece. A API do n8n foi ajustada para receber `desde`/`ate` (ISO) em vez de `dias`.
+- **Alinhamento do logo**: adicionado `align-items:center` explícito no contêiner da marca e `line-height:1` no nome do produto, para o texto "PAINEL VIGIA" não ficar com respiro extra empurrando-o para baixo em relação ao ícone.
+
 ## Pendências fora do escopo desta skill (dependem de infraestrutura ainda não criada)
 
 - `BITRIX_CLIENT_ID` / `BITRIX_CLIENT_SECRET` — placeholders em `api/install.js` e `api/callback.js`, aguardando o cadastro do app local no portal Bitrix24 da Advocacia Escalável.
