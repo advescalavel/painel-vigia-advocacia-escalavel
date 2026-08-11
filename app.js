@@ -140,13 +140,10 @@ function verificarPermissoes() {
 
 // ---------- Chamadas à API ----------
 async function chamarApi(path, params) {
-  const query = new URLSearchParams(params).toString();
-  const urlFinal = API_BASE.replace(/\/$/, '') + '/' + path + (query ? '?' + query : '');
+  const query = new URLSearchParams({ ...params, api_key: API_KEY }).toString();
+  const urlFinal = API_BASE.replace(/\/$/, '') + '/' + path + '?' + query;
 
-  const resposta = await fetch(urlFinal, {
-    method: 'GET',
-    headers: { 'x-api-key': API_KEY }
-  });
+  const resposta = await fetch(urlFinal, { method: 'GET' });
 
   if (!resposta.ok) {
     throw new Error('Falha na API (' + resposta.status + ')');
