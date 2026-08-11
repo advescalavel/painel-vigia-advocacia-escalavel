@@ -33,6 +33,15 @@ const estado = {
 const nf = new Intl.NumberFormat('pt-BR');
 const df = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 
+function escapeHtml(valor) {
+  return String(valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ---------- Cálculo do período (dia | mês | ano → desde/ate ISO) ----------
 function calcularPeriodo() {
   let inicio, fim;
@@ -150,6 +159,7 @@ async function chamarApi(path, params) {
 
 // ---------- Renderização: KPIs ----------
 function renderizarKpis(m) {
+  document.getElementById('kpi-criados').textContent = nf.format(m.total_atendimentos || 0);
   document.getElementById('kpi-score').textContent = m.score_efetividade_medio != null ? nf.format(m.score_efetividade_medio) : '—';
   document.getElementById('kpi-abertos').textContent = nf.format(m.em_aberto || 0);
   document.getElementById('kpi-concluidos').textContent = nf.format(m.concluidos || 0);
@@ -179,7 +189,7 @@ function renderizarVazio() {
   corpo.innerHTML = '';
   const tr = document.createElement('tr');
   const td = document.createElement('td');
-  td.colSpan = 7;
+  td.colSpan = 8;
   td.innerHTML = `
     <div class="ae-vazio">
       <p class="ae-corpo">Nenhum atendimento avaliado nesse período com esses filtros.</p>
@@ -194,7 +204,7 @@ function renderizarErro(mensagem) {
   corpo.innerHTML = '';
   const tr = document.createElement('tr');
   const td = document.createElement('td');
-  td.colSpan = 7;
+  td.colSpan = 8;
   td.innerHTML = `
     <div class="ae-erro">
       <p class="ae-corpo">Não foi possível carregar os atendimentos agora.</p>
@@ -238,7 +248,8 @@ function renderizarTabela(dados) {
       <td class="ae-numero">${item.started_at ? df.format(new Date(item.started_at)) : '—'}</td>
       <td>${badgeStatus(item)}</td>
       <td class="ae-numero">${item.score_efetividade != null ? nf.format(item.score_efetividade) : '—'}</td>
-      <td>${item.falha_critica ? '<span class="ae-badge ae-badge--erro">' + item.falha_critica + '</span>' : '—'}</td>
+      <td>${item.falha_critica ? '<span class="ae-badge ae-badge--erro">' + escapeHtml(item.falha_critica) + '</span>' : '—'}</td>
+      <td>${item.justificativa_avaliacao ? '<span class="ae-avaliacao-texto" title="' + escapeHtml(item.justificativa_avaliacao) + '">' + escapeHtml(item.justificativa_avaliacao) + '</span>' : '—'}</td>
       <td>${sinais(item)}</td>
     `;
     corpo.appendChild(tr);
@@ -268,6 +279,131 @@ function mostrarToast(mensagem) {
   toast.textContent = mensagem;
   document.querySelector('.ae-app').appendChild(toast);
   setTimeout(() => toast.remove(), 5000);
+}
+
+// ---------- Mapa de calor (volume por dia/mês x horário) ----------
+const BINS_HORA = [
+  { rotulo: '00–03', de: 0, ate: 3 },
+  { rotulo: '04–07', de: 4, ate: 7 },
+  { rotulo: '08–11', de: 8, ate: 11 },
+  { rotulo: '12–15', de: 12, ate: 15 },
+  { rotulo: '16–19', de: 16, ate: 19 },
+  { rotulo: '20–23', de: 20, ate: 23 }
+];
+
+function calcularEixoColunas() {
+  if (estado.modoData === 'dia') {
+    return { tipo: 'hora', colunas: Array.from({ length: 24 }, (_, h) => ({ rotulo: String(h).padStart(2, '0') })) };
+  }
+  if (estado.modoData === 'mes') {
+    const [ano, mes] = estado.valorMes.split('-').map(Number);
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    return { tipo: 'dia', colunas: Array.from({ length: ultimoDia }, (_, i) => ({ rotulo: String(i + 1) })) };
+  }
+  const nomesMes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  return { tipo: 'mes', colunas: nomesMes.map(n => ({ rotulo: n })) };
+}
+
+function corIntensidade(valor, max) {
+  if (!valor) return 'var(--ae-surface-2)';
+  const t = valor / max;
+  return `rgba(255, 3, 143, ${(0.12 + t * 0.78).toFixed(2)})`;
+}
+
+function renderizarMapaCalor(pontos) {
+  const el = document.getElementById('grafico-mapa-calor');
+  const legenda = document.getElementById('grafico-legenda');
+  el.innerHTML = '';
+
+  if (!pontos.length) {
+    legenda.textContent = 'por dia e horário';
+    el.innerHTML = '<div class="ae-mapa-calor__vazio">Sem atendimentos nesse período para exibir no gráfico.</div>';
+    return;
+  }
+
+  const eixo = calcularEixoColunas();
+
+  // Modo "dia": uma unica linha, colunas = horas do dia.
+  if (eixo.tipo === 'hora') {
+    legenda.textContent = 'por horário do dia';
+    const contagem = new Array(24).fill(0);
+    pontos.forEach(p => { contagem[new Date(p.started_at).getHours()]++; });
+    const max = Math.max(...contagem, 1);
+
+    const linha = document.createElement('div');
+    linha.className = 'ae-mapa-calor__linha';
+    linha.style.gridTemplateColumns = `repeat(${eixo.colunas.length}, 20px)`;
+    eixo.colunas.forEach((col, i) => {
+      const celula = document.createElement('div');
+      celula.className = 'ae-mapa-calor__celula';
+      celula.style.background = corIntensidade(contagem[i], max);
+      celula.title = `${col.rotulo}h — ${contagem[i]} atendimento(s)`;
+      linha.appendChild(celula);
+    });
+    el.appendChild(linha);
+
+    const rotulos = document.createElement('div');
+    rotulos.className = 'ae-mapa-calor__rotulos-coluna';
+    rotulos.style.gridTemplateColumns = `repeat(${eixo.colunas.length}, 20px)`;
+    eixo.colunas.forEach(col => {
+      const r = document.createElement('div'); r.textContent = col.rotulo; rotulos.appendChild(r);
+    });
+    el.appendChild(rotulos);
+    return;
+  }
+
+  // Modo "mes" ou "ano": mapa de calor real - linhas = faixa de horario, colunas = dia ou mes.
+  legenda.textContent = eixo.tipo === 'dia' ? 'por dia do mês e horário' : 'por mês e horário';
+  const matriz = BINS_HORA.map(() => new Array(eixo.colunas.length).fill(0));
+  pontos.forEach(p => {
+    const d = new Date(p.started_at);
+    const hora = d.getHours();
+    const binIdx = BINS_HORA.findIndex(b => hora >= b.de && hora <= b.ate);
+    const colIdx = eixo.tipo === 'dia' ? (d.getDate() - 1) : d.getMonth();
+    if (binIdx >= 0 && colIdx >= 0 && colIdx < eixo.colunas.length) matriz[binIdx][colIdx]++;
+  });
+  const max = Math.max(...matriz.flat(), 1);
+
+  BINS_HORA.forEach((bin, r) => {
+    const linha = document.createElement('div');
+    linha.className = 'ae-mapa-calor__linha';
+    linha.style.gridTemplateColumns = `56px repeat(${eixo.colunas.length}, 20px)`;
+    const rotulo = document.createElement('div');
+    rotulo.className = 'ae-mapa-calor__rotulo-linha';
+    rotulo.textContent = bin.rotulo;
+    linha.appendChild(rotulo);
+    eixo.colunas.forEach((col, c) => {
+      const celula = document.createElement('div');
+      celula.className = 'ae-mapa-calor__celula';
+      celula.style.background = corIntensidade(matriz[r][c], max);
+      celula.title = `${col.rotulo} · ${bin.rotulo}h — ${matriz[r][c]} atendimento(s)`;
+      linha.appendChild(celula);
+    });
+    el.appendChild(linha);
+  });
+
+  const rotulos = document.createElement('div');
+  rotulos.className = 'ae-mapa-calor__rotulos-coluna';
+  rotulos.style.gridTemplateColumns = `56px repeat(${eixo.colunas.length}, 20px)`;
+  rotulos.appendChild(document.createElement('div'));
+  eixo.colunas.forEach(col => {
+    const r = document.createElement('div'); r.textContent = col.rotulo; rotulos.appendChild(r);
+  });
+  el.appendChild(rotulos);
+}
+
+async function carregarSerieTemporal() {
+  const { desde, ate } = calcularPeriodo();
+  try {
+    const dados = await chamarApi('painel-ae-serie-temporal', {
+      desde, ate,
+      ...(estado.tipologia ? { tipologia: estado.tipologia } : {})
+    });
+    renderizarMapaCalor(dados.pontos || []);
+  } catch (e) {
+    document.getElementById('grafico-mapa-calor').innerHTML = '<div class="ae-mapa-calor__vazio">Não foi possível carregar o gráfico agora.</div>';
+    console.error(e);
+  }
 }
 
 // ---------- Carregamento de dados ----------
@@ -305,7 +441,7 @@ async function carregarAtendimentos() {
 
 async function atualizarTudo() {
   if (estado.secao === 'metricas') {
-    await carregarMetricas();
+    await Promise.all([carregarMetricas(), carregarSerieTemporal()]);
   } else {
     await carregarAtendimentos();
   }
