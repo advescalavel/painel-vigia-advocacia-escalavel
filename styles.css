@@ -19,11 +19,31 @@ html, body {
   .ae-app { padding: 16px; }
 }
 
-/* ---------- Cabeçalho: alinhamento vertical fino da logo ---------- */
-.ae-cabecalho__marca { align-items: center; }
-.ae-logo--completo { display: inline-flex; align-items: center; }
-.ae-produto__nome { line-height: 1; display: inline-flex; align-items: center; }
-.ae-produto__sep { align-self: center; height: 20px; min-height: 0; }
+/* ---------- Cabeçalho: alinhamento vertical real da logo ---------- */
+/* .ae-cabecalho__marca nunca foi definido como flex em lugar nenhum (nem no
+   ae-brand.css nem aqui) - align-items sem display:flex não tem efeito, e
+   isso explicava o desalinhamento anterior. */
+.ae-cabecalho__marca {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ae-produto__nome { line-height: 1; }
+
+/* Tamanho da logo: sobrescrito por ID porque .ae-logo--completo svg (no
+   ae-brand.css) tem a mesma especificidade e ganharia do estilo inline do
+   contêiner - só um seletor de maior especificidade (ID) resolve isso.
+   Cabeçalho reduzido de 24px para 18px; rodapé para 13px, pareado com o
+   tamanho do texto "Desenvolvido por" ao lado. */
+#logo-completo, #logo-completo svg { height: 18px; }
+#logo-rodape, #logo-rodape svg { height: 13px; }
+
+.ae-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
 
 /* ---------- Layout: sidebar + conteúdo ---------- */
 .ae-layout {
@@ -117,6 +137,58 @@ html, body {
 .ae-kpi-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
 .ae-kpi-card .ae-kpi { color: var(--ae-text); }
 .ae-kpi-card--alerta .ae-kpi { color: var(--ae-pink-ink); }
+
+/* ---------- Mapa de calor (volume por dia/mês x horário) ---------- */
+.ae-grafico-card { margin-bottom: 24px; padding: 16px; }
+.ae-grafico-cabecalho { margin-bottom: 12px; }
+.ae-grafico-cabecalho .ae-titulo-secao { margin: 0 0 2px; }
+
+.ae-mapa-calor {
+  display: grid;
+  overflow-x: auto;
+  gap: 2px;
+  padding-bottom: 4px;
+}
+.ae-mapa-calor__linha {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  align-items: center;
+}
+.ae-mapa-calor__rotulo-linha {
+  font-size: 11px;
+  color: var(--ae-text-soft);
+  text-align: right;
+  padding-right: 4px;
+  white-space: nowrap;
+}
+.ae-mapa-calor__celula {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  background: var(--ae-surface-2);
+}
+.ae-mapa-calor__rotulos-coluna {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--ae-text-soft);
+  text-align: center;
+}
+.ae-mapa-calor__vazio { padding: 24px; text-align: center; color: var(--ae-text-soft); font-size: 13px; }
+
+/* ---------- Coluna "Avaliação do Vigia" na Auditoria ---------- */
+.ae-avaliacao-texto {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--ae-text-soft);
+  cursor: help;
+}
 
 /* ---------- Tabela (Auditoria) ---------- */
 .ae-tabela-wrap { max-height: 560px; overflow: auto; }
