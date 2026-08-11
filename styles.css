@@ -15,87 +15,129 @@ html, body {
   padding: 24px;
   position: relative;
 }
-
 @media (max-width: 700px) {
   .ae-app { padding: 16px; }
 }
 
-/* ---------- Filtros ---------- */
-.ae-filtros {
+/* ---------- Cabeçalho: alinhamento vertical fino da logo ---------- */
+.ae-cabecalho__marca { align-items: center; }
+.ae-logo--completo { display: inline-flex; align-items: center; }
+.ae-produto__nome { line-height: 1; display: inline-flex; align-items: center; }
+.ae-produto__sep { align-self: center; height: 20px; min-height: 0; }
+
+/* ---------- Layout: sidebar + conteúdo ---------- */
+.ae-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 700px) {
+  .ae-layout { grid-template-columns: 1fr; }
+}
+
+.ae-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 16px;
+}
+@media (max-width: 700px) {
+  .ae-sidebar {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+}
+.ae-sidebar__item {
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--ae-radius-sm);
+  background: transparent;
+  color: var(--ae-text-soft);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ae-sidebar__item:hover { background: var(--ae-surface-2); color: var(--ae-text); }
+.ae-sidebar__item.is-ativo {
+  background: var(--ae-surface);
+  border-color: var(--ae-border);
+  color: var(--ae-text);
+  box-shadow: var(--ae-shadow-1);
+  border-left: 3px solid var(--ae-pink);
+}
+.ae-sidebar__aviso { margin-top: 12px; padding: 8px; border-radius: var(--ae-radius-sm); background: var(--ae-warn-soft); color: var(--ae-warn); font-size: 12px; }
+@media (max-width: 700px) {
+  .ae-sidebar__aviso { display: none; }
+}
+
+.ae-conteudo { min-width: 0; }
+
+/* ---------- Abas principais (Métricas / Auditoria) ---------- */
+.ae-conteudo > .ae-abas { margin-bottom: 16px; }
+
+/* ---------- Filtro de data ---------- */
+.ae-filtro-data {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: 12px;
+  flex-wrap: wrap;
   margin-bottom: 20px;
 }
-.ae-filtros__periodo {
-  display: flex;
-  gap: 8px;
+.ae-chip-group { display: flex; gap: 8px; }
+.ae-input {
+  font-family: inherit;
+  font-size: 13.5px;
+  padding: 7px 10px;
+  border-radius: var(--ae-radius-sm);
+  border: 1px solid var(--ae-border);
+  background: var(--ae-surface);
+  color: var(--ae-text);
 }
 
 /* ---------- KPIs ---------- */
 .ae-kpis {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
-  margin-bottom: 24px;
 }
 @media (max-width: 1024px) {
-  .ae-kpis { grid-template-columns: repeat(3, 1fr); }
-}
-@media (max-width: 700px) {
   .ae-kpis { grid-template-columns: repeat(2, 1fr); }
 }
-.ae-kpi-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
+@media (max-width: 700px) {
+  .ae-kpis { grid-template-columns: 1fr; }
 }
+.ae-kpi-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
 .ae-kpi-card .ae-kpi { color: var(--ae-text); }
 .ae-kpi-card--alerta .ae-kpi { color: var(--ae-pink-ink); }
 
-/* ---------- Tabela ---------- */
-.ae-tabela-wrap {
-  max-height: 560px;
-  overflow: auto;
-}
+/* ---------- Tabela (Auditoria) ---------- */
+.ae-tabela-wrap { max-height: 560px; overflow: auto; }
 .ae-tabela-wrap table { min-width: 720px; }
 
 .ae-paginacao {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--ae-border);
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  padding: 12px 16px; border-top: 1px solid var(--ae-border);
 }
 .ae-paginacao__info { color: var(--ae-text-soft); font-size: 13px; margin-right: 8px; }
 
-/* ---------- Sinais na tabela ---------- */
 .ae-sinais { display: flex; gap: 4px; flex-wrap: wrap; }
 
-/* ---------- Estado vazio, carregando, erro ---------- */
-.ae-vazio, .ae-erro {
-  position: relative;
-  overflow: hidden;
-}
-.ae-vazio .ae-watermark, .ae-erro .ae-watermark { color: var(--ae-brand); }
-
+.ae-vazio, .ae-erro { position: relative; overflow: hidden; }
 .ae-linha-skeleton td { padding: 12px; }
 .ae-linha-skeleton .ae-skeleton { height: 14px; width: 100%; }
 
 /* ---------- Toast de erro de rede ---------- */
 .ae-toast {
-  position: fixed;
-  bottom: 20px; right: 20px;
-  max-width: 320px;
-  padding: 12px 16px;
-  border-radius: var(--ae-radius);
-  background: var(--ae-danger-soft);
-  color: var(--ae-danger);
-  box-shadow: var(--ae-shadow-2);
-  font-size: 13px;
-  z-index: 10;
+  position: fixed; bottom: 20px; right: 20px; max-width: 320px;
+  padding: 12px 16px; border-radius: var(--ae-radius);
+  background: var(--ae-danger-soft); color: var(--ae-danger);
+  box-shadow: var(--ae-shadow-2); font-size: 13px; z-index: 10;
 }
