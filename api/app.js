@@ -16,11 +16,18 @@ const path = require('path');
 
 module.exports = async function handler(req, res) {
   try {
-    const html = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf8');
+    const filePath = path.join(process.cwd(), 'templates', 'index.html');
+    const html = fs.readFileSync(filePath, 'utf-8');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   } catch (erro) {
-    console.error('Erro ao servir o painel via handler raiz:', erro);
-    res.status(500).send('Erro ao carregar o painel.');
+    console.error('Falha ao servir index.html via /api/app:', erro);
+    // Temporario: exposto o erro real pra diagnostico. Depois de confirmar
+    // que funciona, trocar de volta pra uma mensagem generica sem detalhe interno.
+    res.status(500).send(
+      'Erro ao carregar o painel.\n' +
+      'Detalhe: ' + erro.message + '\n' +
+      'cwd: ' + process.cwd()
+    );
   }
 };
