@@ -26,6 +26,7 @@ html, body {
   margin: 0 auto;
   padding: 24px;
   position: relative;
+  overflow-x: hidden;
 }
 @media (max-width: 700px) {
   .ae-app { padding: 16px; }
@@ -217,6 +218,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 .ae-kpi-card--mini .ae-rotulo { font-size: 11px; }
 .ae-kpi-card--mini .ae-numero { font-size: 22px; }
@@ -230,7 +232,7 @@ html, body {
 @media (max-width: 900px) {
   .ae-graficos { grid-template-columns: 1fr; }
 }
-.ae-grafico-card { padding: 16px; }
+.ae-grafico-card { padding: 16px; min-width: 0; }
 .ae-grafico-card--largo { grid-column: 1 / -1; }
 .ae-grafico-cabecalho { margin-bottom: 12px; }
 .ae-grafico-cabecalho .ae-titulo-secao { margin: 0 0 2px; }
