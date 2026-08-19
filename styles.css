@@ -103,14 +103,18 @@ html, body {
 /* ---------- Abas principais (Métricas / Auditoria) ---------- */
 .ae-conteudo > .ae-abas { margin-bottom: 16px; }
 
-/* ---------- Filtro de data ---------- */
-.ae-filtro-data {
+/* ---------- Filtros do topo (período, colaborador/IA, status) ---------- */
+.ae-filtros-topo {
   display: flex;
   align-items: center;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 20px;
+  position: relative;
 }
+
+.ae-periodo-wrap { position: relative; }
+.ae-btn--periodo { font-weight: 600; }
 .ae-chip-group { display: flex; gap: 8px; }
 .ae-input {
   font-family: inherit;
@@ -122,61 +126,147 @@ html, body {
   color: var(--ae-text);
 }
 
-/* ---------- KPIs ---------- */
-.ae-kpis {
+.ae-periodo-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, 200px);
   gap: 16px;
+  background: var(--ae-surface);
+  border: 1px solid var(--ae-border);
+  border-radius: var(--ae-radius);
+  box-shadow: var(--ae-shadow-2);
+  padding: 16px;
+}
+#periodo-popup[hidden] { display: none; }
+.ae-periodo-popup__col { display: flex; flex-direction: column; gap: 4px; }
+.ae-periodo-opcao {
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  border-radius: var(--ae-radius-sm);
+  color: var(--ae-text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ae-periodo-opcao:hover { background: var(--ae-surface-2); }
+.ae-periodo-opcao.is-ativo { background: var(--ae-magic-pink); color: var(--ae-action-ink); }
+
+.ae-periodo-lista {
+  max-height: 130px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--ae-border);
+  border-radius: var(--ae-radius-sm);
+  padding: 6px;
+}
+.ae-periodo-lista label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.ae-periodo-lista label:hover { background: var(--ae-surface-2); }
+
+.ae-periodo-popup__rodape {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--ae-border);
+  padding-top: 12px;
+}
+
+@media (max-width: 760px) {
+  .ae-periodo-popup { grid-template-columns: 1fr; width: min(90vw, 320px); }
+}
+
+/* ---------- KPIs compactos (item 5: uma linha só, ou um bloco em duas) ---------- */
+.ae-kpis--compacto {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
 }
 @media (max-width: 1024px) {
-  .ae-kpis { grid-template-columns: repeat(2, 1fr); }
+  .ae-kpis--compacto { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 700px) {
-  .ae-kpis { grid-template-columns: 1fr; }
+.ae-kpi-card--mini {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
-.ae-kpi-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
-.ae-kpi-card .ae-kpi { color: var(--ae-text); }
-.ae-kpi-card--alerta .ae-kpi { color: var(--ae-pink-ink); }
+.ae-kpi-card--mini .ae-rotulo { font-size: 11px; }
+.ae-kpi-card--mini .ae-numero { font-size: 22px; }
 
-/* ---------- Mapa de calor (volume por dia/mês x horário) ---------- */
-.ae-grafico-card { margin-bottom: 24px; padding: 16px; }
+/* ---------- Área de gráficos (prioridade máxima de espaço) ---------- */
+.ae-graficos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .ae-graficos { grid-template-columns: 1fr; }
+}
+.ae-grafico-card { padding: 16px; }
+.ae-grafico-card--largo { grid-column: 1 / -1; }
 .ae-grafico-cabecalho { margin-bottom: 12px; }
 .ae-grafico-cabecalho .ae-titulo-secao { margin: 0 0 2px; }
+.ae-grafico-vazio { padding: 32px 16px; text-align: center; color: var(--ae-text-soft); font-size: 13px; }
 
-.ae-mapa-calor {
-  display: grid;
+/* ---------- Barras verticais empilhadas (séries no tempo) ---------- */
+.ae-barras-v {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 180px;
   overflow-x: auto;
-  gap: 2px;
-  padding-bottom: 4px;
+  padding-top: 8px;
 }
-.ae-mapa-calor__linha {
-  display: grid;
-  grid-auto-flow: column;
-  gap: 2px;
-  align-items: center;
+.ae-barras-v__coluna {
+  display: flex;
+  flex-direction: column-reverse;
+  min-width: 18px;
+  flex: 1 0 auto;
+  height: 100%;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
 }
-.ae-mapa-calor__rotulo-linha {
-  font-size: 11px;
-  color: var(--ae-text-soft);
-  text-align: right;
-  padding-right: 4px;
-  white-space: nowrap;
+.ae-barras-v__segmento { width: 100%; }
+.ae-barras-v__rotulos {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
 }
-.ae-mapa-calor__celula {
-  width: 20px;
-  height: 20px;
-  border-radius: 3px;
-  background: var(--ae-surface-2);
-}
-.ae-mapa-calor__rotulos-coluna {
-  display: grid;
-  grid-auto-flow: column;
-  gap: 2px;
+.ae-barras-v__rotulo {
+  min-width: 18px;
+  flex: 1 0 auto;
+  text-align: center;
   font-size: 10px;
   color: var(--ae-text-soft);
-  text-align: center;
+  white-space: nowrap;
 }
-.ae-mapa-calor__vazio { padding: 24px; text-align: center; color: var(--ae-text-soft); font-size: 13px; }
+.ae-legenda { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; font-size: 12px; }
+.ae-legenda__item { display: flex; align-items: center; gap: 5px; }
+.ae-legenda__cor { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* ---------- Barras horizontais (críterios, falha crítica, por colaborador, tipos) ---------- */
+.ae-barras-h { display: flex; flex-direction: column; gap: 10px; }
+.ae-barras-h__linha { display: grid; grid-template-columns: 140px 1fr 40px; align-items: center; gap: 8px; }
+.ae-barras-h__rotulo { font-size: 12.5px; color: var(--ae-text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ae-barras-h__trilha { height: 10px; background: var(--ae-surface-2); border-radius: 5px; overflow: hidden; }
+.ae-barras-h__preenchido { height: 100%; background: var(--ae-magic-pink); border-radius: 5px; }
+.ae-barras-h__valor { font-size: 12.5px; text-align: right; color: var(--ae-text); }
 
 /* ---------- Coluna "Avaliação do Vigia" na Auditoria ---------- */
 .ae-avaliacao-texto {
