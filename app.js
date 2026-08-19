@@ -402,52 +402,9 @@ function renderizarColunasSimples(containerId, dados, campoRotulo, campoValor, c
   el.appendChild(rotulosWrap);
 }
 
-const CORES_PIZZA = ['var(--ae-magic-pink)', 'var(--ae-r3)', 'var(--ae-r1)', 'var(--ae-pink-ink)', 'var(--ae-r4)', 'var(--ae-r2)'];
 const CORES_FAIXA_SCORE = ['var(--ae-pink-ink)', 'var(--ae-magic-pink)', 'var(--ae-r2)', 'var(--ae-r3)', 'var(--ae-r4)'];
 function seriesFaixasScore(faixas) {
   return faixas.map((f, i) => ({ chave: f.chave, rotulo: f.rotulo, cor: CORES_FAIXA_SCORE[i % CORES_FAIXA_SCORE.length] }));
-}
-
-function renderizarPizza(containerId, dados, campoRotulo, campoValor) {
-  const el = document.getElementById(containerId);
-  el.innerHTML = '';
-  const somaReal = (dados || []).reduce((acc, d) => acc + (Number(d[campoValor]) || 0), 0);
-  if (!dados || !dados.length || somaReal === 0) {
-    el.innerHTML = '<div class="ae-grafico-vazio">Sem dados nesse período.</div>';
-    return;
-  }
-
-  const total = somaReal;
-  let acumulado = 0;
-  const trechos = dados.map((d, i) => {
-    const valor = Number(d[campoValor]) || 0;
-    const inicio = acumulado / total * 360;
-    acumulado += valor;
-    const fim = acumulado / total * 360;
-    return `${CORES_PIZZA[i % CORES_PIZZA.length]} ${inicio}deg ${fim}deg`;
-  });
-
-  const wrap = document.createElement('div');
-  wrap.className = 'ae-pizza-wrap';
-
-  const pizza = document.createElement('div');
-  pizza.className = 'ae-pizza';
-  pizza.style.background = trechos.length === 1 ? CORES_PIZZA[0] : `conic-gradient(${trechos.join(', ')})`;
-  wrap.appendChild(pizza);
-
-  const legenda = document.createElement('div');
-  legenda.className = 'ae-pizza-legenda';
-  dados.forEach((d, i) => {
-    const valor = Number(d[campoValor]) || 0;
-    const pct = Math.round(valor / total * 100);
-    const item = document.createElement('div');
-    item.className = 'ae-legenda__item';
-    item.innerHTML = `<span class="ae-legenda__cor" style="background:${CORES_PIZZA[i % CORES_PIZZA.length]}"></span>${escapeHtml(d[campoRotulo])}: ${nf.format(valor)} (${pct}%)`;
-    legenda.appendChild(item);
-  });
-  wrap.appendChild(legenda);
-
-  el.appendChild(wrap);
 }
 
 function renderizarBarrasHorizontais(containerId, dados, campoRotulo, campoValor, formatador) {
@@ -498,11 +455,11 @@ function renderizarDashboardComercial(dados) {
 
   const mostrarColaborador = estado.colaborador === 'colaboradores';
   document.getElementById('graficos-setor').innerHTML = `
-    <div class="ae-card ae-grafico-card ae-grafico-card--largo">
+    <div class="ae-card ae-grafico-card">
       <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Atendimentos ao longo do tempo</h2><p class="ae-apoio">por desfecho</p></div>
       <div id="grafico-serie-desfecho"></div>
     </div>
-    <div class="ae-card ae-grafico-card ae-grafico-card--largo">
+    <div class="ae-card ae-grafico-card">
       <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Distribuição do score de efetividade</h2><p class="ae-apoio">quantidade de atendimentos por faixa de nota, ao longo do tempo</p></div>
       <div id="grafico-distribuicao"></div>
     </div>
@@ -527,7 +484,7 @@ function renderizarDashboardComercial(dados) {
     { chave: 'automatico', rotulo: 'Automático', cor: 'var(--ae-r1)' }
   ], dados.granularidade);
   renderizarBarrasEmpilhadas('grafico-distribuicao', dados.distribuicao_score_serie, seriesFaixasScore(dados.distribuicao_score_faixas), dados.granularidade);
-  renderizarPizza('grafico-criterios', dados.criterios, 'criterio', 'media');
+  renderizarColunasSimples('grafico-criterios', dados.criterios, 'criterio', 'media', 'var(--ae-r3)');
   renderizarColunasSimples('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade', 'var(--ae-pink-ink)');
   if (mostrarColaborador) {
     renderizarBarrasHorizontais('grafico-por-colaborador', dados.por_colaborador, 'operador', 'quantidade');
@@ -557,11 +514,11 @@ function renderizarDashboardSuporte(dados) {
 
   const mostrarColaborador = estado.colaborador === 'colaboradores';
   document.getElementById('graficos-setor').innerHTML = `
-    <div class="ae-card ae-grafico-card ae-grafico-card--largo">
+    <div class="ae-card ae-grafico-card">
       <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Atendimentos ao longo do tempo</h2><p class="ae-apoio">por resolução</p></div>
       <div id="grafico-serie-resolucao"></div>
     </div>
-    <div class="ae-card ae-grafico-card ae-grafico-card--largo">
+    <div class="ae-card ae-grafico-card">
       <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Pedidos gerados pela IA ao longo do tempo</h2></div>
       <div id="grafico-serie-pedidos"></div>
     </div>
@@ -569,7 +526,7 @@ function renderizarDashboardSuporte(dados) {
       <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Pedidos por tipo de ocorrência</h2></div>
       <div id="grafico-pedidos-tipo"></div>
     </div>
-    <div class="ae-card ae-grafico-card ae-grafico-card--largo">
+    <div class="ae-card ae-grafico-card">
       <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Distribuição do score de efetividade</h2><p class="ae-apoio">quantidade de atendimentos por faixa de nota, ao longo do tempo</p></div>
       <div id="grafico-distribuicao"></div>
     </div>
@@ -595,9 +552,9 @@ function renderizarDashboardSuporte(dados) {
   renderizarBarrasEmpilhadas('grafico-serie-pedidos', dados.serie_pedidos.map(p => ({ bucket: p.bucket, total: p.quantidade })), [
     { chave: 'total', rotulo: 'Pedidos', cor: 'var(--ae-magic-pink)' }
   ], dados.granularidade);
-  renderizarPizza('grafico-pedidos-tipo', dados.pedidos_por_tipo, 'tipo', 'quantidade');
+  renderizarColunasSimples('grafico-pedidos-tipo', dados.pedidos_por_tipo, 'tipo', 'quantidade', 'var(--ae-magic-pink)');
   renderizarBarrasEmpilhadas('grafico-distribuicao', dados.distribuicao_score_serie, seriesFaixasScore(dados.distribuicao_score_faixas), dados.granularidade);
-  renderizarPizza('grafico-criterios', dados.criterios, 'criterio', 'media');
+  renderizarColunasSimples('grafico-criterios', dados.criterios, 'criterio', 'media', 'var(--ae-r3)');
   renderizarColunasSimples('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade', 'var(--ae-pink-ink)');
   if (mostrarColaborador) {
     renderizarBarrasHorizontais('grafico-por-colaborador', dados.por_colaborador, 'operador', 'quantidade');
