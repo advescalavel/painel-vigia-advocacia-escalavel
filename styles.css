@@ -129,6 +129,11 @@ html, body {
 .ae-periodo-wrap { position: relative; }
 .ae-btn--periodo { font-weight: 600; }
 .ae-chip-group { display: flex; gap: 8px; }
+.ae-filtros-topo .ae-chip {
+  min-height: 36px;
+  padding: 8px 16px;
+  font-size: 13.5px;
+}
 .ae-input {
   font-family: inherit;
   font-size: 13.5px;
