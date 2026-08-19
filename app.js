@@ -403,6 +403,10 @@ function renderizarColunasSimples(containerId, dados, campoRotulo, campoValor, c
 }
 
 const CORES_PIZZA = ['var(--ae-magic-pink)', 'var(--ae-r3)', 'var(--ae-r1)', 'var(--ae-pink-ink)', 'var(--ae-r4)', 'var(--ae-r2)'];
+const CORES_FAIXA_SCORE = ['var(--ae-pink-ink)', 'var(--ae-magic-pink)', 'var(--ae-r2)', 'var(--ae-r3)', 'var(--ae-r4)'];
+function seriesFaixasScore(faixas) {
+  return faixas.map((f, i) => ({ chave: f.chave, rotulo: f.rotulo, cor: CORES_FAIXA_SCORE[i % CORES_FAIXA_SCORE.length] }));
+}
 
 function renderizarPizza(containerId, dados, campoRotulo, campoValor) {
   const el = document.getElementById(containerId);
@@ -497,8 +501,8 @@ function renderizarDashboardComercial(dados) {
       <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Atendimentos ao longo do tempo</h2><p class="ae-apoio">por desfecho</p></div>
       <div id="grafico-serie-desfecho"></div>
     </div>
-    <div class="ae-card ae-grafico-card">
-      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Distribuição do score de efetividade</h2></div>
+    <div class="ae-card ae-grafico-card ae-grafico-card--largo">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Distribuição do score de efetividade</h2><p class="ae-apoio">quantidade de atendimentos por faixa de nota, ao longo do tempo</p></div>
       <div id="grafico-distribuicao"></div>
     </div>
     <div class="ae-card ae-grafico-card">
@@ -521,7 +525,7 @@ function renderizarDashboardComercial(dados) {
     { chave: 'humano', rotulo: 'Transferido', cor: 'var(--ae-magic-pink)' },
     { chave: 'automatico', rotulo: 'Automático', cor: 'var(--ae-r1)' }
   ], dados.granularidade);
-  renderizarColunasSimples('grafico-distribuicao', dados.distribuicao_score, 'faixa', 'quantidade', 'var(--ae-r3)');
+  renderizarBarrasEmpilhadas('grafico-distribuicao', dados.distribuicao_score_serie, seriesFaixasScore(dados.distribuicao_score_faixas), dados.granularidade);
   renderizarPizza('grafico-criterios', dados.criterios, 'criterio', 'media');
   renderizarColunasSimples('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade', 'var(--ae-pink-ink)');
   if (mostrarColaborador) {
@@ -564,8 +568,8 @@ function renderizarDashboardSuporte(dados) {
       <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Pedidos por tipo de ocorrência</h2></div>
       <div id="grafico-pedidos-tipo"></div>
     </div>
-    <div class="ae-card ae-grafico-card">
-      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Distribuição do score de efetividade</h2></div>
+    <div class="ae-card ae-grafico-card ae-grafico-card--largo">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Distribuição do score de efetividade</h2><p class="ae-apoio">quantidade de atendimentos por faixa de nota, ao longo do tempo</p></div>
       <div id="grafico-distribuicao"></div>
     </div>
     <div class="ae-card ae-grafico-card">
@@ -591,7 +595,7 @@ function renderizarDashboardSuporte(dados) {
     { chave: 'total', rotulo: 'Pedidos', cor: 'var(--ae-magic-pink)' }
   ], dados.granularidade);
   renderizarPizza('grafico-pedidos-tipo', dados.pedidos_por_tipo, 'tipo', 'quantidade');
-  renderizarColunasSimples('grafico-distribuicao', dados.distribuicao_score, 'faixa', 'quantidade', 'var(--ae-r3)');
+  renderizarBarrasEmpilhadas('grafico-distribuicao', dados.distribuicao_score_serie, seriesFaixasScore(dados.distribuicao_score_faixas), dados.granularidade);
   renderizarPizza('grafico-criterios', dados.criterios, 'criterio', 'media');
   renderizarColunasSimples('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade', 'var(--ae-pink-ink)');
   if (mostrarColaborador) {
