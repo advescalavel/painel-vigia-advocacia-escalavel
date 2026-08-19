@@ -1,8 +1,20 @@
 /* =========================================================================
    styles.css — Painel Vigia (Advocacia Escalável)
-   Layout específico do app. Cores, tipografia e componentes base vêm de
-   ae-brand.css — nada aqui redefine token de marca.
+   Layout específico do app. Cores e tipografia-base vêm de ae-brand.css —
+   nada aqui troca a fonte da marca (continua Geologica) nem os tokens de
+   cor. O bloco abaixo só ajusta peso/tracking para um resultado mais leve
+   e elegante, a pedido do cliente — Geologica em 800/900 pesado demais
+   para o gosto do painel; pesos médios (500/600) com leve mais respiro
+   nas maiúsculas mantêm a fonte da marca mas com toque mais delicado.
    ========================================================================= */
+
+.ae-titulo-app { font-weight: 500; letter-spacing: -0.012em; }
+.ae-titulo-secao { font-weight: 500; letter-spacing: -0.008em; }
+.ae-numero, .ae-kpi { font-weight: 600; letter-spacing: -0.01em; }
+.ae-rotulo { font-weight: 600; letter-spacing: 0.08em; }
+.ae-produto__nome { font-weight: 400; }
+.ae-produto__nome b { font-weight: 600; }
+.ae-btn { font-weight: 500; }
 
 html, body {
   margin: 0;
@@ -277,9 +289,7 @@ html, body {
 }
 
 /* ---------- Pizza ---------- */
-.ae-pizza-wrap { display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
-.ae-pizza { width: 150px; height: 150px; border-radius: 50%; flex-shrink: 0; }
-.ae-pizza-legenda { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+/* ---------- Pizza removida a pedido do cliente (voltou a ser coluna) ---------- */
 
 /* ---------- Barras horizontais (críterios, falha crítica, por colaborador, tipos) ---------- */
 .ae-barras-h { display: flex; flex-direction: column; gap: 10px; }
