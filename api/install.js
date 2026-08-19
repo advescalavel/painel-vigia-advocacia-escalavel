@@ -3,6 +3,10 @@
 // Recebe o POST que o Bitrix24 envia quando o app é instalado no portal,
 // troca o AUTH_ID/REFRESH_ID por um token de longa duração e grava em
 // bitrix_installations (Supabase), no mesmo padrão do Painel Sofia.
+//
+// PLACEHOLDER: preencha BITRIX_CLIENT_ID / BITRIX_CLIENT_SECRET nas variáveis
+// de ambiente do Vercel quando o app local for criado no portal da
+// Advocacia Escalável.
 // =============================================================================
 
 const SUPABASE_URL = process.env.SUPABASE_URL; // ex.: https://grxchfgnsqvmsmcjcayp.supabase.co
@@ -36,6 +40,18 @@ function telaInstalacao({ sucesso, mensagem }) {
     <p class="status">${sucesso ? 'Instalação concluída com sucesso.' : 'Não foi possível concluir a instalação.'}</p>
     <p class="status" style="opacity:.8; font-weight:400">${mensagem}</p>
   </div>
+
+  <!-- SDK do Bitrix24 - sem isso, o Bitrix24 nunca marca a instalacao como
+       finalizada e volta a chamar este mesmo handler de instalacao a cada
+       tentativa de abrir o app, em vez de abrir o app de verdade. -->
+  <script src="//api.bitrix24.com/api/v1/"></script>
+  <script>
+    if (window.BX24) {
+      BX24.init(function () {
+        ${sucesso ? 'BX24.installFinish();' : ''}
+      });
+    }
+  </script>
 </body>
 </html>`;
 }
