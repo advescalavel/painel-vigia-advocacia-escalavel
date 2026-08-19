@@ -527,6 +527,10 @@ function renderizarDashboardSuporte(dados) {
       <span class="ae-rotulo">Sem resposta &gt; 30min (agora)</span>
       <span class="ae-numero ae-kpi">${nf.format(dados.kpis.sem_resposta_30min_agora)}</span>
     </div>
+    <div class="ae-card ae-kpi-card--mini">
+      <span class="ae-rotulo">Efetividade da IA</span>
+      <span class="ae-numero ae-kpi">${dados.kpis.efetividade_media_pct != null ? nf.format(dados.kpis.efetividade_media_pct) + '%' : '—'}</span>
+    </div>
   `;
 
   const mostrarColaborador = estado.colaborador === 'colaboradores';
