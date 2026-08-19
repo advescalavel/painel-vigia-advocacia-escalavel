@@ -1,8 +1,17 @@
 // =============================================================================
 // api/install.js — Handler de instalação do app local no Bitrix24.
 // Recebe o POST que o Bitrix24 envia quando o app é instalado no portal,
-// troca o AUTH_ID/REFRESH_ID por um token de longa duração e grava em
-// bitrix_installations (Supabase), no mesmo padrão do Painel Sofia.
+// grava os tokens em bitrix_installations (Supabase) e finaliza o handshake
+// via BX24.installFinish().
+//
+// Duas regras aprendidas com o Painel Sofia (Engel), que já resolveu esse
+// mesmo problema:
+// 1. installFinish() precisa ser chamado sempre que os tokens de auth vierem
+//    validos, mesmo que a gravacao no Supabase falhe - senao TODOS os
+//    usuarios do portal ficam com o app marcado como "nao instalado", nao
+//    so o registro de tokens.
+// 2. Depois de installFinish(), redireciona pra raiz - nao deixa a pessoa
+//    parada na tela de sucesso precisando voltar pro Bitrix24 manualmente.
 //
 // PLACEHOLDER: preencha BITRIX_CLIENT_ID / BITRIX_CLIENT_SECRET nas variáveis
 // de ambiente do Vercel quando o app local for criado no portal da
@@ -11,11 +20,53 @@
 
 const SUPABASE_URL = process.env.SUPABASE_URL; // ex.: https://grxchfgnsqvmsmcjcayp.supabase.co
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const BITRIX_CLIENT_ID = process.env.BITRIX_CLIENT_ID;
-const BITRIX_CLIENT_SECRET = process.env.BITRIX_CLIENT_SECRET;
 
-function telaInstalacao({ sucesso, mensagem }) {
-  return `<!doctype html>
+async function gravarInstalacao({ memberId, domain, accessToken, refreshToken, expiresIn }) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+  const clientEndpoint = `https://${domain}/rest/`;
+  const segundos = Number(expiresIn) > 0 ? Number(expiresIn) : 3600;
+  await fetch(`${SUPABASE_URL}/rest/v1/bitrix_installations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_SERVICE_ROLE_KEY,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      'Prefer': 'resolution=merge-duplicates'
+    },
+    body: JSON.stringify({
+      member_id: memberId,
+      domain,
+      client_endpoint: clientEndpoint,
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_at: new Date(Date.now() + segundos * 1000).toISOString(),
+      updated_at: new Date().toISOString()
+    })
+  });
+}
+
+module.exports = async function handler(req, res) {
+  if (req.method === 'POST') {
+    const body = req.body || {};
+    const domain = body.DOMAIN;
+    const accessToken = body.AUTH_ID;
+    const refreshToken = body.REFRESH_ID;
+    const expiresIn = body.AUTH_EXPIRES;
+    const memberId = body.member_id;
+
+    if (memberId && accessToken && refreshToken) {
+      try {
+        await gravarInstalacao({ memberId, domain, accessToken, refreshToken, expiresIn });
+      } catch (erro) {
+        // Nao interrompe o handshake por causa disso - ver nota no topo do arquivo.
+        console.error('Falha ao salvar instalação no Supabase:', erro);
+      }
+    } else {
+      console.warn('POST de instalação recebido sem os campos esperados:', Object.keys(body));
+    }
+  }
+
+  res.status(200).send(`<!doctype html>
 <html lang="pt-BR" data-tema="claro">
 <head>
 <meta charset="UTF-8">
@@ -37,67 +88,29 @@ function telaInstalacao({ sucesso, mensagem }) {
 <body>
   <div class="caixa">
     <p class="marca">PAINEL <b>VIGIA</b></p>
-    <p class="status">${sucesso ? 'Instalação concluída com sucesso.' : 'Não foi possível concluir a instalação.'}</p>
-    <p class="status" style="opacity:.8; font-weight:400">${mensagem}</p>
+    <p class="status" id="status-instalacao">Concluindo a instalação…</p>
   </div>
 
-  <!-- SDK do Bitrix24 - sem isso, o Bitrix24 nunca marca a instalacao como
-       finalizada e volta a chamar este mesmo handler de instalacao a cada
-       tentativa de abrir o app, em vez de abrir o app de verdade. -->
   <script src="//api.bitrix24.com/api/v1/"></script>
   <script>
-    if (window.BX24) {
-      BX24.init(function () {
-        ${sucesso ? 'BX24.installFinish();' : ''}
-      });
+    // Finaliza o handshake de instalacao do app. Enquanto isso nao for
+    // chamado, o Bitrix24 marca o app como "nao instalado" pro portal
+    // inteiro, e volta a mandar todo mundo pra esta mesma tela em vez de
+    // abrir o painel de verdade.
+    function finalizarInstalacao() {
+      if (window.BX24 && typeof window.BX24.installFinish === 'function') {
+        window.BX24.installFinish();
+      }
+      window.location.href = '/';
+    }
+
+    if (window.BX24 && typeof window.BX24.init === 'function') {
+      window.BX24.init(finalizarInstalacao);
+    } else {
+      document.getElementById('status-instalacao').textContent =
+        'Não foi possível carregar o SDK do Bitrix24. Tente novamente ou contate o suporte.';
     }
   </script>
 </body>
-</html>`;
-}
-
-module.exports = async function handler(req, res) {
-  try {
-    const body = req.body || {};
-    const authId = body.AUTH_ID;
-    const refreshId = body.REFRESH_ID;
-    const memberId = body.member_id;
-    const domain = body.DOMAIN;
-
-    if (!authId || !memberId) {
-      res.status(400).send(telaInstalacao({ sucesso: false, mensagem: 'Dados de instalação incompletos.' }));
-      return;
-    }
-
-    // PLACEHOLDER: troca do código por token de longa duração via oauth.bitrix.info
-    // quando o app estiver registrado com client_id/secret reais. Hoje apenas
-    // registra o que o Bitrix24 já entrega na chamada de instalação local.
-    const clientEndpoint = `https://${domain}/rest/`;
-
-    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      await fetch(`${SUPABASE_URL}/rest/v1/bitrix_installations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_SERVICE_ROLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({
-          member_id: memberId,
-          domain,
-          client_endpoint: clientEndpoint,
-          access_token: authId,
-          refresh_token: refreshId,
-          expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
-          updated_at: new Date().toISOString()
-        })
-      });
-    }
-
-    res.status(200).send(telaInstalacao({ sucesso: true, mensagem: 'Pode voltar ao Bitrix24 e abrir o Painel Vigia.' }));
-  } catch (erro) {
-    console.error('Erro na instalação:', erro);
-    res.status(500).send(telaInstalacao({ sucesso: false, mensagem: 'Erro interno. Tente novamente ou contate o suporte.' }));
-  }
+</html>`);
 };
