@@ -314,6 +314,10 @@ function renderizarBarrasEmpilhadas(containerId, dados, series, granularidade) {
   });
   el.appendChild(legenda);
 
+  const detalhe = document.createElement('div');
+  detalhe.className = 'ae-barras-v__detalhe';
+  detalhe.innerHTML = '<span class="ae-apoio">Clique numa coluna para ver o detalhe por faixa.</span>';
+
   const max = Math.max(...dados.map(d => series.reduce((acc, s) => acc + (Number(d[s.chave]) || 0), 0)), 1);
 
   const barrasWrap = document.createElement('div');
@@ -321,11 +325,22 @@ function renderizarBarrasEmpilhadas(containerId, dados, series, granularidade) {
   const rotulosWrap = document.createElement('div');
   rotulosWrap.className = 'ae-barras-v__rotulos';
 
+  function mostrarDetalhe(d, totalColuna) {
+    const partes = series
+      .map(s => ({ rotulo: s.rotulo, cor: s.cor, valor: Number(d[s.chave]) || 0 }))
+      .filter(p => p.valor > 0);
+    const itens = partes.map(p =>
+      `<span class="ae-legenda__item"><span class="ae-legenda__cor" style="background:${p.cor}"></span>${escapeHtml(p.rotulo)}: <b>${nf.format(p.valor)}</b></span>`
+    ).join('');
+    detalhe.innerHTML = `<strong>${formatarBucket(d.bucket, granularidade)}</strong> — ${nf.format(totalColuna)} no total<div class="ae-legenda" style="margin-top:6px">${itens || '<span class="ae-apoio">Sem valores nessa coluna.</span>'}</div>`;
+  }
+
   dados.forEach(d => {
     const coluna = document.createElement('div');
     coluna.className = 'ae-barras-v__coluna';
     const totalColuna = series.reduce((acc, s) => acc + (Number(d[s.chave]) || 0), 0);
-    coluna.title = formatarBucket(d.bucket, granularidade) + ': ' + totalColuna;
+    coluna.style.cursor = 'pointer';
+    coluna.addEventListener('click', () => mostrarDetalhe(d, totalColuna));
     series.forEach(s => {
       const valor = Number(d[s.chave]) || 0;
       if (!valor) return;
@@ -333,6 +348,7 @@ function renderizarBarrasEmpilhadas(containerId, dados, series, granularidade) {
       seg.className = 'ae-barras-v__segmento';
       seg.style.background = s.cor;
       seg.style.height = (valor / max * 85) + '%';
+      seg.title = s.rotulo + ': ' + nf.format(valor);
       coluna.appendChild(seg);
     });
     // Ultimo filho em coluna column-reverse renderiza no topo visual - por isso
@@ -351,6 +367,7 @@ function renderizarBarrasEmpilhadas(containerId, dados, series, granularidade) {
 
   el.appendChild(barrasWrap);
   el.appendChild(rotulosWrap);
+  el.appendChild(detalhe);
 }
 
 function renderizarColunasSimples(containerId, dados, campoRotulo, campoValor, cor) {
@@ -642,13 +659,15 @@ function renderizarTabela(dados) {
   for (const item of dados.itens) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${escapeHtml(item.contact_name || 'Não informado')}</td>
+      <td>${item.chat_id
+          ? '<a class="ae-link-cliente" href="https://advocaciaescalavel.bitrix24.com.br/online/?IM_DIALOG=chat' + encodeURIComponent(item.chat_id) + '" target="_blank" rel="noopener">' + escapeHtml(item.contact_name || 'Não informado') + '</a>'
+          : escapeHtml(item.contact_name || 'Não informado')}</td>
       <td>${badgeSetor(item.tipologia)}</td>
       <td class="ae-numero">${item.started_at ? df.format(new Date(item.started_at)) : '—'}</td>
       <td>${badgeStatus(item)}</td>
       <td class="ae-numero">${item.score_efetividade != null ? nf.format(item.score_efetividade) : '—'}</td>
       <td>${item.falha_critica ? '<span class="ae-badge ae-badge--erro">' + escapeHtml(item.falha_critica) + '</span>' : '—'}</td>
-      <td>${item.justificativa_avaliacao ? '<span class="ae-avaliacao-texto" title="' + escapeHtml(item.justificativa_avaliacao) + '">' + escapeHtml(item.justificativa_avaliacao) + '</span>' : '—'}</td>
+      <td>${item.justificativa_avaliacao ? '<span class="ae-avaliacao-texto" title="Clique para ver o texto completo">' + escapeHtml(item.justificativa_avaliacao) + '</span>' : '—'}</td>
       <td>${sinais(item)}</td>
     `;
     corpo.appendChild(tr);
@@ -740,6 +759,10 @@ function ligarNavegacao() {
     estado.status = e.target.value;
     estado.pagina = 1;
     atualizarTudo();
+  });
+  document.getElementById('tabela-corpo').addEventListener('click', (e) => {
+    const alvo = e.target.closest('.ae-avaliacao-texto');
+    if (alvo) alvo.classList.toggle('ae-avaliacao-texto--expandida');
   });
   document.getElementById('btn-atualizar').addEventListener('click', atualizarTudo);
   document.getElementById('btn-tema').addEventListener('click', alternarTema);
