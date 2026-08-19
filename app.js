@@ -411,12 +411,13 @@ function seriesFaixasScore(faixas) {
 function renderizarPizza(containerId, dados, campoRotulo, campoValor) {
   const el = document.getElementById(containerId);
   el.innerHTML = '';
-  if (!dados || !dados.length) {
+  const somaReal = (dados || []).reduce((acc, d) => acc + (Number(d[campoValor]) || 0), 0);
+  if (!dados || !dados.length || somaReal === 0) {
     el.innerHTML = '<div class="ae-grafico-vazio">Sem dados nesse período.</div>';
     return;
   }
 
-  const total = dados.reduce((acc, d) => acc + (Number(d[campoValor]) || 0), 0) || 1;
+  const total = somaReal;
   let acumulado = 0;
   const trechos = dados.map((d, i) => {
     const valor = Number(d[campoValor]) || 0;
