@@ -3,5 +3,10 @@
     { "source": "/", "destination": "/api/app.js" },
     { "source": "/api/install", "destination": "/api/install.js" },
     { "source": "/api/callback", "destination": "/api/callback.js" }
-  ]
+  ],
+  "functions": {
+    "api/app.js": {
+      "includeFiles": "templates/index.html"
+    }
+  }
 }
