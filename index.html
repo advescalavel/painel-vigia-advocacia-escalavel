@@ -71,11 +71,18 @@
       <div class="ae-filtros-topo">
         <div class="ae-periodo-wrap">
           <button class="ae-btn ae-btn--periodo" id="btn-periodo" type="button" aria-haspopup="true" aria-expanded="false">
-            📅 <span id="periodo-rotulo">Mês atual</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <span id="periodo-rotulo">Hoje</span>
           </button>
           <div class="ae-periodo-popup" id="periodo-popup" hidden>
             <div class="ae-periodo-popup__col">
               <p class="ae-rotulo">Atalhos</p>
+              <button class="ae-periodo-opcao" data-preset="hoje">Hoje</button>
               <button class="ae-periodo-opcao" data-preset="mes-atual">Mês atual</button>
               <button class="ae-periodo-opcao" data-preset="mes-anterior">Mês anterior</button>
               <button class="ae-periodo-opcao" data-preset="trimestre-atual">Trimestre atual</button>
@@ -93,9 +100,10 @@
             <div class="ae-periodo-popup__col">
               <p class="ae-rotulo">Conjunto de anos</p>
               <div class="ae-periodo-lista" id="lista-anos"></div>
-              <p class="ae-rotulo" style="margin-top:12px">Personalizado</p>
-              <input type="date" id="periodo-custom-desde" class="ae-input" style="width:100%; margin-bottom:6px">
-              <input type="date" id="periodo-custom-ate" class="ae-input" style="width:100%">
+              <p class="ae-rotulo" style="margin-top:12px">Dia específico ou intervalo</p>
+              <input type="date" id="periodo-custom-desde" class="ae-input" style="width:100%; margin-bottom:6px" title="Preencha só este campo para selecionar um único dia">
+              <input type="date" id="periodo-custom-ate" class="ae-input" style="width:100%" title="Opcional — preencha só se quiser um intervalo">
+              <p class="ae-apoio" style="margin-top:4px; font-size:11px">Preencha só o primeiro campo para um único dia.</p>
             </div>
             <div class="ae-periodo-popup__rodape">
               <button class="ae-btn" id="btn-periodo-cancelar" type="button">Cancelar</button>
@@ -105,7 +113,7 @@
         </div>
 
         <div class="ae-chip-group" role="group" aria-label="Colaborador ou IA">
-          <button class="ae-chip is-ativo" data-colaborador="todos">Colaboradores</button>
+          <button class="ae-chip" data-colaborador="colaboradores">Colaboradores</button>
           <button class="ae-chip" data-colaborador="ia">IA</button>
         </div>
 
