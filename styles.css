@@ -240,7 +240,6 @@ html, body {
   flex: 1 0 auto;
   height: 100%;
   border-radius: 3px 3px 0 0;
-  overflow: hidden;
 }
 .ae-barras-v__segmento { width: 100%; }
 .ae-barras-v__rotulos {
@@ -259,6 +258,28 @@ html, body {
 .ae-legenda { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; font-size: 12px; }
 .ae-legenda__item { display: flex; align-items: center; gap: 5px; }
 .ae-legenda__cor { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* ---------- Coluna simples (com valor no topo, sem eixo lateral) ---------- */
+.ae-barras-v__coluna--simples {
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  overflow: visible;
+}
+.ae-barras-v__valor-topo,
+.ae-barras-v__total-topo {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ae-text);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* ---------- Pizza ---------- */
+.ae-pizza-wrap { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.ae-pizza { width: 150px; height: 150px; border-radius: 50%; flex-shrink: 0; }
+.ae-pizza-legenda { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
 
 /* ---------- Barras horizontais (críterios, falha crítica, por colaborador, tipos) ---------- */
 .ae-barras-h { display: flex; flex-direction: column; gap: 10px; }
