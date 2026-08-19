@@ -52,9 +52,8 @@
   <div class="ae-layout">
 
     <nav class="ae-sidebar" aria-label="Setores" id="sidebar-setores">
-      <button class="ae-sidebar__item is-ativo" data-tipologia="" aria-current="true">Todos</button>
-      <button class="ae-sidebar__item" data-tipologia="comercial" hidden>Comercial</button>
-      <button class="ae-sidebar__item" data-tipologia="suporte" hidden>Suporte</button>
+      <button class="ae-sidebar__item is-ativo" data-tipologia="comercial" aria-current="true">Comercial</button>
+      <button class="ae-sidebar__item" data-tipologia="suporte">Suporte</button>
       <p class="ae-apoio ae-sidebar__aviso" id="aviso-permissao" hidden>
         Controle de acesso por departamento ainda não configurado — exibindo todos os setores.
       </p>
@@ -68,58 +67,59 @@
         <button class="ae-abas__item" data-secao="auditoria" role="tab" aria-selected="false">Auditoria</button>
       </div>
 
-      <!-- ===== Filtro de data: exclusivamente dia, mês ou ano ===== -->
-      <div class="ae-filtro-data">
-        <div class="ae-chip-group" role="group" aria-label="Modo do filtro de data">
-          <button class="ae-chip is-ativo" data-modo="dia">Dia</button>
-          <button class="ae-chip" data-modo="mes">Mês</button>
-          <button class="ae-chip" data-modo="ano">Ano</button>
+      <!-- ===== Filtros: período (popup), colaborador/IA, status ===== -->
+      <div class="ae-filtros-topo">
+        <div class="ae-periodo-wrap">
+          <button class="ae-btn ae-btn--periodo" id="btn-periodo" type="button" aria-haspopup="true" aria-expanded="false">
+            📅 <span id="periodo-rotulo">Mês atual</span>
+          </button>
+          <div class="ae-periodo-popup" id="periodo-popup" hidden>
+            <div class="ae-periodo-popup__col">
+              <p class="ae-rotulo">Atalhos</p>
+              <button class="ae-periodo-opcao" data-preset="mes-atual">Mês atual</button>
+              <button class="ae-periodo-opcao" data-preset="mes-anterior">Mês anterior</button>
+              <button class="ae-periodo-opcao" data-preset="trimestre-atual">Trimestre atual</button>
+              <button class="ae-periodo-opcao" data-preset="semestre-atual">Semestre atual</button>
+              <button class="ae-periodo-opcao" data-preset="semana-atual">Semana atual</button>
+              <button class="ae-periodo-opcao" data-preset="semana-anterior">Semana anterior</button>
+              <button class="ae-periodo-opcao" data-preset="ano-atual">Ano atual</button>
+            </div>
+            <div class="ae-periodo-popup__col">
+              <p class="ae-rotulo">Conjunto de meses</p>
+              <div class="ae-periodo-lista" id="lista-meses"></div>
+              <p class="ae-rotulo" style="margin-top:12px">Conjunto de semanas</p>
+              <div class="ae-periodo-lista" id="lista-semanas"></div>
+            </div>
+            <div class="ae-periodo-popup__col">
+              <p class="ae-rotulo">Conjunto de anos</p>
+              <div class="ae-periodo-lista" id="lista-anos"></div>
+              <p class="ae-rotulo" style="margin-top:12px">Personalizado</p>
+              <input type="date" id="periodo-custom-desde" class="ae-input" style="width:100%; margin-bottom:6px">
+              <input type="date" id="periodo-custom-ate" class="ae-input" style="width:100%">
+            </div>
+            <div class="ae-periodo-popup__rodape">
+              <button class="ae-btn" id="btn-periodo-cancelar" type="button">Cancelar</button>
+              <button class="ae-btn ae-btn--primario" id="btn-periodo-aplicar" type="button">Aplicar</button>
+            </div>
+          </div>
         </div>
-        <input type="date" id="filtro-dia" class="ae-input">
-        <input type="month" id="filtro-mes" class="ae-input" hidden>
-        <select id="filtro-ano" class="ae-input" hidden></select>
+
+        <div class="ae-chip-group" role="group" aria-label="Colaborador ou IA">
+          <button class="ae-chip is-ativo" data-colaborador="todos">Colaboradores</button>
+          <button class="ae-chip" data-colaborador="ia">IA</button>
+        </div>
+
+        <select id="filtro-status" class="ae-input">
+          <option value="todos">Todos os status</option>
+          <option value="aberto">Em aberto</option>
+          <option value="concluido">Concluídos</option>
+        </select>
       </div>
 
-      <!-- ===== Seção Métricas ===== -->
+      <!-- ===== Seção Métricas (conteúdo montado por app.js conforme o setor ativo) ===== -->
       <section id="secao-metricas">
-        <section class="ae-kpis" aria-label="Métricas do período">
-          <div class="ae-card ae-kpi-card">
-            <span class="ae-rotulo">Atendimentos criados</span>
-            <span class="ae-numero ae-kpi" id="kpi-criados">—</span>
-          </div>
-          <div class="ae-card ae-kpi-card">
-            <span class="ae-rotulo">Score de efetividade médio</span>
-            <span class="ae-numero ae-kpi" id="kpi-score">—</span>
-          </div>
-          <div class="ae-card ae-kpi-card">
-            <span class="ae-rotulo">Em aberto</span>
-            <span class="ae-numero ae-kpi" id="kpi-abertos">—</span>
-          </div>
-          <div class="ae-card ae-kpi-card">
-            <span class="ae-rotulo">Concluídos</span>
-            <span class="ae-numero ae-kpi" id="kpi-concluidos">—</span>
-          </div>
-          <div class="ae-card ae-kpi-card ae-kpi-card--alerta">
-            <span class="ae-rotulo">Com falha crítica</span>
-            <span class="ae-numero ae-kpi" id="kpi-falha-critica">—</span>
-          </div>
-          <div class="ae-card ae-kpi-card ae-kpi-card--alerta">
-            <span class="ae-rotulo">Sem resposta 30min (agora)</span>
-            <span class="ae-numero ae-kpi" id="kpi-sem-resposta">—</span>
-          </div>
-          <div class="ae-card ae-kpi-card ae-kpi-card--alerta">
-            <span class="ae-rotulo">Insatisfação não escalada</span>
-            <span class="ae-numero ae-kpi" id="kpi-insatisfacao">—</span>
-          </div>
-        </section>
-
-        <section class="ae-card ae-grafico-card" aria-label="Volume de atendimentos por dia e horário">
-          <div class="ae-grafico-cabecalho">
-            <h2 class="ae-titulo-secao">Volume de atendimentos</h2>
-            <p class="ae-apoio" id="grafico-legenda">por dia e horário</p>
-          </div>
-          <div id="grafico-mapa-calor" class="ae-mapa-calor"></div>
-        </section>
+        <section class="ae-kpis ae-kpis--compacto" id="kpis-setor" aria-label="Métricas do setor"></section>
+        <section class="ae-graficos" id="graficos-setor" aria-label="Gráficos de decomposição"></section>
       </section>
 
       <!-- ===== Seção Auditoria (lista/detalhe dos atendimentos avaliados) ===== -->
