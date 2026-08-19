@@ -484,7 +484,7 @@ function renderizarDashboardComercial(dados) {
     { chave: 'automatico', rotulo: 'Automático', cor: 'var(--ae-r1)' }
   ], dados.granularidade);
   renderizarBarrasEmpilhadas('grafico-distribuicao', dados.distribuicao_score_serie, seriesFaixasScore(dados.distribuicao_score_faixas), dados.granularidade);
-  renderizarColunasSimples('grafico-criterios', dados.criterios, 'criterio', 'media', 'var(--ae-r3)');
+  renderizarBarrasHorizontais('grafico-criterios', dados.criterios, 'criterio', 'media', v => nf.format(v));
   renderizarColunasSimples('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade', 'var(--ae-pink-ink)');
   if (mostrarColaborador) {
     renderizarBarrasHorizontais('grafico-por-colaborador', dados.por_colaborador, 'operador', 'quantidade');
@@ -552,9 +552,9 @@ function renderizarDashboardSuporte(dados) {
   renderizarBarrasEmpilhadas('grafico-serie-pedidos', dados.serie_pedidos.map(p => ({ bucket: p.bucket, total: p.quantidade })), [
     { chave: 'total', rotulo: 'Pedidos', cor: 'var(--ae-magic-pink)' }
   ], dados.granularidade);
-  renderizarColunasSimples('grafico-pedidos-tipo', dados.pedidos_por_tipo, 'tipo', 'quantidade', 'var(--ae-magic-pink)');
+  renderizarBarrasHorizontais('grafico-pedidos-tipo', dados.pedidos_por_tipo, 'tipo', 'quantidade');
   renderizarBarrasEmpilhadas('grafico-distribuicao', dados.distribuicao_score_serie, seriesFaixasScore(dados.distribuicao_score_faixas), dados.granularidade);
-  renderizarColunasSimples('grafico-criterios', dados.criterios, 'criterio', 'media', 'var(--ae-r3)');
+  renderizarBarrasHorizontais('grafico-criterios', dados.criterios, 'criterio', 'media', v => nf.format(v));
   renderizarColunasSimples('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade', 'var(--ae-pink-ink)');
   if (mostrarColaborador) {
     renderizarBarrasHorizontais('grafico-por-colaborador', dados.por_colaborador, 'operador', 'quantidade');
