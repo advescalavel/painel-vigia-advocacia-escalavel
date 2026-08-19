@@ -274,6 +274,14 @@ html, body {
   color: var(--ae-text-soft);
   white-space: nowrap;
 }
+.ae-barras-v__detalhe {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--ae-radius-sm);
+  background: var(--ae-surface-2);
+  font-size: 12.5px;
+}
+.ae-barras-v__detalhe .ae-legenda { margin-bottom: 0; }
 .ae-legenda { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; font-size: 12px; }
 .ae-legenda__item { display: flex; align-items: center; gap: 5px; }
 .ae-legenda__cor { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
@@ -315,8 +323,23 @@ html, body {
   white-space: nowrap;
   font-size: 12.5px;
   color: var(--ae-text-soft);
-  cursor: help;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--ae-border-strong);
 }
+.ae-avaliacao-texto--expandida {
+  max-width: 360px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  color: var(--ae-text);
+  border-bottom: none;
+}
+.ae-link-cliente {
+  color: var(--ae-pink-ink);
+  text-decoration: none;
+  font-weight: 500;
+}
+.ae-link-cliente:hover { text-decoration: underline; }
 
 /* ---------- Tabela (Auditoria) ---------- */
 .ae-tabela-wrap { max-height: 560px; overflow: auto; }
