@@ -332,9 +332,15 @@ function renderizarBarrasEmpilhadas(containerId, dados, series, granularidade) {
       const seg = document.createElement('div');
       seg.className = 'ae-barras-v__segmento';
       seg.style.background = s.cor;
-      seg.style.height = (valor / max * 100) + '%';
+      seg.style.height = (valor / max * 85) + '%';
       coluna.appendChild(seg);
     });
+    // Ultimo filho em coluna column-reverse renderiza no topo visual - por isso
+    // o rotulo de total entra depois dos segmentos, nao antes.
+    const totalLabel = document.createElement('span');
+    totalLabel.className = 'ae-barras-v__total-topo';
+    totalLabel.textContent = nf.format(totalColuna);
+    coluna.appendChild(totalLabel);
     barrasWrap.appendChild(coluna);
 
     const rot = document.createElement('div');
@@ -345,6 +351,98 @@ function renderizarBarrasEmpilhadas(containerId, dados, series, granularidade) {
 
   el.appendChild(barrasWrap);
   el.appendChild(rotulosWrap);
+}
+
+function renderizarColunasSimples(containerId, dados, campoRotulo, campoValor, cor) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  if (!dados || !dados.length) {
+    el.innerHTML = '<div class="ae-grafico-vazio">Sem dados nesse período.</div>';
+    return;
+  }
+  const max = Math.max(...dados.map(d => Number(d[campoValor]) || 0), 1);
+
+  const barrasWrap = document.createElement('div');
+  barrasWrap.className = 'ae-barras-v';
+  const rotulosWrap = document.createElement('div');
+  rotulosWrap.className = 'ae-barras-v__rotulos';
+
+  dados.forEach(d => {
+    const valor = Number(d[campoValor]) || 0;
+    const rotuloCompleto = String(d[campoRotulo]);
+
+    const coluna = document.createElement('div');
+    coluna.className = 'ae-barras-v__coluna ae-barras-v__coluna--simples';
+    coluna.title = rotuloCompleto + ': ' + nf.format(valor);
+
+    const valorTopo = document.createElement('span');
+    valorTopo.className = 'ae-barras-v__valor-topo';
+    valorTopo.textContent = nf.format(valor);
+
+    const barra = document.createElement('div');
+    barra.className = 'ae-barras-v__segmento';
+    barra.style.background = cor || 'var(--ae-magic-pink)';
+    barra.style.height = (valor / max * 85) + '%';
+    barra.style.minHeight = valor > 0 ? '2px' : '0';
+
+    // Ordem normal (nao column-reverse aqui): o rotulo vem antes da barra no
+    // DOM, e como o eixo esta com justify-content:flex-end os dois ficam
+    // colados no fundo da trilha, com o numero sempre logo acima da barra.
+    coluna.appendChild(valorTopo);
+    coluna.appendChild(barra);
+    barrasWrap.appendChild(coluna);
+
+    const rot = document.createElement('div');
+    rot.className = 'ae-barras-v__rotulo';
+    rot.textContent = rotuloCompleto.length > 14 ? rotuloCompleto.slice(0, 14) + '…' : rotuloCompleto;
+    rotulosWrap.appendChild(rot);
+  });
+
+  el.appendChild(barrasWrap);
+  el.appendChild(rotulosWrap);
+}
+
+const CORES_PIZZA = ['var(--ae-magic-pink)', 'var(--ae-r3)', 'var(--ae-r1)', 'var(--ae-pink-ink)', 'var(--ae-r4)', 'var(--ae-r2)'];
+
+function renderizarPizza(containerId, dados, campoRotulo, campoValor) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  if (!dados || !dados.length) {
+    el.innerHTML = '<div class="ae-grafico-vazio">Sem dados nesse período.</div>';
+    return;
+  }
+
+  const total = dados.reduce((acc, d) => acc + (Number(d[campoValor]) || 0), 0) || 1;
+  let acumulado = 0;
+  const trechos = dados.map((d, i) => {
+    const valor = Number(d[campoValor]) || 0;
+    const inicio = acumulado / total * 360;
+    acumulado += valor;
+    const fim = acumulado / total * 360;
+    return `${CORES_PIZZA[i % CORES_PIZZA.length]} ${inicio}deg ${fim}deg`;
+  });
+
+  const wrap = document.createElement('div');
+  wrap.className = 'ae-pizza-wrap';
+
+  const pizza = document.createElement('div');
+  pizza.className = 'ae-pizza';
+  pizza.style.background = trechos.length === 1 ? CORES_PIZZA[0] : `conic-gradient(${trechos.join(', ')})`;
+  wrap.appendChild(pizza);
+
+  const legenda = document.createElement('div');
+  legenda.className = 'ae-pizza-legenda';
+  dados.forEach((d, i) => {
+    const valor = Number(d[campoValor]) || 0;
+    const pct = Math.round(valor / total * 100);
+    const item = document.createElement('div');
+    item.className = 'ae-legenda__item';
+    item.innerHTML = `<span class="ae-legenda__cor" style="background:${CORES_PIZZA[i % CORES_PIZZA.length]}"></span>${escapeHtml(d[campoRotulo])}: ${nf.format(valor)} (${pct}%)`;
+    legenda.appendChild(item);
+  });
+  wrap.appendChild(legenda);
+
+  el.appendChild(wrap);
 }
 
 function renderizarBarrasHorizontais(containerId, dados, campoRotulo, campoValor, formatador) {
@@ -423,9 +521,9 @@ function renderizarDashboardComercial(dados) {
     { chave: 'humano', rotulo: 'Transferido', cor: 'var(--ae-magic-pink)' },
     { chave: 'automatico', rotulo: 'Automático', cor: 'var(--ae-r1)' }
   ], dados.granularidade);
-  renderizarBarrasHorizontais('grafico-distribuicao', dados.distribuicao_score, 'faixa', 'quantidade');
-  renderizarBarrasHorizontais('grafico-criterios', dados.criterios, 'criterio', 'media', v => nf.format(v));
-  renderizarBarrasHorizontais('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade');
+  renderizarColunasSimples('grafico-distribuicao', dados.distribuicao_score, 'faixa', 'quantidade', 'var(--ae-r3)');
+  renderizarPizza('grafico-criterios', dados.criterios, 'criterio', 'media');
+  renderizarColunasSimples('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade', 'var(--ae-pink-ink)');
   if (mostrarColaborador) {
     renderizarBarrasHorizontais('grafico-por-colaborador', dados.por_colaborador, 'operador', 'quantidade');
   }
@@ -492,10 +590,10 @@ function renderizarDashboardSuporte(dados) {
   renderizarBarrasEmpilhadas('grafico-serie-pedidos', dados.serie_pedidos.map(p => ({ bucket: p.bucket, total: p.quantidade })), [
     { chave: 'total', rotulo: 'Pedidos', cor: 'var(--ae-magic-pink)' }
   ], dados.granularidade);
-  renderizarBarrasHorizontais('grafico-pedidos-tipo', dados.pedidos_por_tipo, 'tipo', 'quantidade');
-  renderizarBarrasHorizontais('grafico-distribuicao', dados.distribuicao_score, 'faixa', 'quantidade');
-  renderizarBarrasHorizontais('grafico-criterios', dados.criterios, 'criterio', 'media', v => nf.format(v));
-  renderizarBarrasHorizontais('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade');
+  renderizarPizza('grafico-pedidos-tipo', dados.pedidos_por_tipo, 'tipo', 'quantidade');
+  renderizarColunasSimples('grafico-distribuicao', dados.distribuicao_score, 'faixa', 'quantidade', 'var(--ae-r3)');
+  renderizarPizza('grafico-criterios', dados.criterios, 'criterio', 'media');
+  renderizarColunasSimples('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade', 'var(--ae-pink-ink)');
   if (mostrarColaborador) {
     renderizarBarrasHorizontais('grafico-por-colaborador', dados.por_colaborador, 'operador', 'quantidade');
   }
