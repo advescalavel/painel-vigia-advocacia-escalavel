@@ -1,16 +1,20 @@
 // =============================================================================
 // app.js — Painel Vigia (Advocacia Escalável)
-// Consome a API do n8n (workflow "Painel - Vigia - Advocacia Escalável - API")
-// e renderiza métricas + auditoria dentro do iframe do Bitrix24.
+// Dashboards por setor (Comercial/Suporte) com filtro de período (atalhos +
+// conjunto selecionável não-contínuo), colaborador/IA e status, e gráficos
+// de decomposição. Aba Auditoria mantém a lista/detalhe dos atendimentos.
 // =============================================================================
 
 // ---------- Configuração ----------
-const API_BASE = 'https://webhook.prod.advocaciaescalaveldev.shop/webhook';
-const API_KEY = 'vigia-ae-k7x9mP2qL8wZ4nR1';
+// PLACEHOLDER: troque pela URL base real do webhook do n8n quando o workflow
+// da API estiver publicado (ex.: https://SEU-N8N/webhook).
+const API_BASE = 'PLACEHOLDER_URL_BASE_N8N/webhook';
+// PLACEHOLDER: mesma chave configurada nos nodes "...Autorizado?" da API.
+const API_KEY = 'PLACEHOLDER_CHAVE_COMPARTILHADA_PAINEL';
 
 // PLACEHOLDER: mapeamento de ID de departamento do Bitrix24 para setor do
 // painel. Preencha com os IDs reais (Bitrix24 → Empresa → Estrutura da
-// empresa). Enquanto estiver vazio, o painel libera todos os setores e avisa
+// empresa). Enquanto estiver vazio, o painel libera os dois setores e avisa
 // na sidebar, em vez de bloquear silenciosamente o acesso de todo mundo.
 const DEPARTAMENTOS_SETOR = {
   // 'ID_DEPARTAMENTO_COMERCIAL': 'comercial',
@@ -18,48 +22,189 @@ const DEPARTAMENTOS_SETOR = {
 };
 
 const TEMA_STORAGE_KEY = 'ae-tema:painel-vigia-ae';
+const nf = new Intl.NumberFormat('pt-BR');
+const df = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+const NOMES_MES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+function escapeHtml(valor) {
+  return String(valor)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ---------- Estado ----------
 const estado = {
-  tipologia: '',
+  tipologia: 'comercial',
   secao: 'metricas',
-  modoData: 'dia',
-  valorDia: new Date().toISOString().slice(0, 10),
-  valorMes: new Date().toISOString().slice(0, 7),
-  valorAno: new Date().getFullYear(),
+  colaborador: 'todos',
+  status: 'todos',
+  periodos: [],
+  periodoRotulo: 'Mês atual',
   pagina: 1,
   limite: 25
 };
 
-const nf = new Intl.NumberFormat('pt-BR');
-const df = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-
-function escapeHtml(valor) {
-  return String(valor)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+// ---------- Cálculo de períodos ----------
+function periodoMes(ano, mes) {
+  return {
+    desde: new Date(ano, mes, 1, 0, 0, 0, 0).toISOString(),
+    ate: new Date(ano, mes + 1, 0, 23, 59, 59, 999).toISOString()
+  };
+}
+function periodoAno(ano) {
+  return {
+    desde: new Date(ano, 0, 1, 0, 0, 0, 0).toISOString(),
+    ate: new Date(ano, 11, 31, 23, 59, 59, 999).toISOString()
+  };
+}
+function periodoTrimestreAtual() {
+  const agora = new Date();
+  const inicioTrimestre = Math.floor(agora.getMonth() / 3) * 3;
+  return {
+    desde: new Date(agora.getFullYear(), inicioTrimestre, 1, 0, 0, 0, 0).toISOString(),
+    ate: new Date(agora.getFullYear(), inicioTrimestre + 3, 0, 23, 59, 59, 999).toISOString()
+  };
+}
+function periodoSemestreAtual() {
+  const agora = new Date();
+  const inicioSemestre = agora.getMonth() < 6 ? 0 : 6;
+  return {
+    desde: new Date(agora.getFullYear(), inicioSemestre, 1, 0, 0, 0, 0).toISOString(),
+    ate: new Date(agora.getFullYear(), inicioSemestre + 6, 0, 23, 59, 59, 999).toISOString()
+  };
+}
+function segundaDaSemana(d) {
+  const dia = d.getDay();
+  const diff = (dia === 0 ? -6 : 1) - dia;
+  const seg = new Date(d);
+  seg.setDate(d.getDate() + diff);
+  seg.setHours(0, 0, 0, 0);
+  return seg;
+}
+function periodoSemana(dataReferencia) {
+  const seg = segundaDaSemana(dataReferencia);
+  const dom = new Date(seg);
+  dom.setDate(seg.getDate() + 6);
+  dom.setHours(23, 59, 59, 999);
+  return { desde: seg.toISOString(), ate: dom.toISOString() };
 }
 
-// ---------- Cálculo do período (dia | mês | ano → desde/ate ISO) ----------
-function calcularPeriodo() {
-  let inicio, fim;
+const PRESETS = {
+  'mes-atual': { rotulo: 'Mês atual', calcular: () => { const a = new Date(); return periodoMes(a.getFullYear(), a.getMonth()); } },
+  'mes-anterior': {
+    rotulo: 'Mês anterior',
+    calcular: () => { const a = new Date(); const m = a.getMonth() - 1; return m < 0 ? periodoMes(a.getFullYear() - 1, 11) : periodoMes(a.getFullYear(), m); }
+  },
+  'trimestre-atual': { rotulo: 'Trimestre atual', calcular: periodoTrimestreAtual },
+  'semestre-atual': { rotulo: 'Semestre atual', calcular: periodoSemestreAtual },
+  'semana-atual': { rotulo: 'Semana atual', calcular: () => periodoSemana(new Date()) },
+  'semana-anterior': { rotulo: 'Semana anterior', calcular: () => periodoSemana(new Date(Date.now() - 7 * 86400000)) },
+  'ano-atual': { rotulo: 'Ano atual', calcular: () => periodoAno(new Date().getFullYear()) }
+};
 
-  if (estado.modoData === 'dia') {
-    const [ano, mes, dia] = estado.valorDia.split('-').map(Number);
-    inicio = new Date(ano, mes - 1, dia, 0, 0, 0, 0);
-    fim = new Date(ano, mes - 1, dia, 23, 59, 59, 999);
-  } else if (estado.modoData === 'mes') {
-    const [ano, mes] = estado.valorMes.split('-').map(Number);
-    inicio = new Date(ano, mes - 1, 1, 0, 0, 0, 0);
-    fim = new Date(ano, mes, 0, 23, 59, 59, 999); // último dia do mês
-  } else {
-    inicio = new Date(estado.valorAno, 0, 1, 0, 0, 0, 0);
-    fim = new Date(estado.valorAno, 11, 31, 23, 59, 59, 999);
+function formatarBucket(bucket, granularidade) {
+  if (granularidade === 'mes') {
+    const [ano, mes] = bucket.split('-');
+    return NOMES_MES[Number(mes) - 1] + '/' + ano.slice(2);
+  }
+  const [, mes, dia] = bucket.split('-');
+  return dia + '/' + mes;
+}
+
+// ---------- Popup de período ----------
+function abrirPopupPeriodo() {
+  document.getElementById('periodo-popup').hidden = false;
+  document.getElementById('btn-periodo').setAttribute('aria-expanded', 'true');
+}
+function fecharPopupPeriodo() {
+  document.getElementById('periodo-popup').hidden = true;
+  document.getElementById('btn-periodo').setAttribute('aria-expanded', 'false');
+}
+
+function popularListasPeriodo() {
+  const agora = new Date();
+
+  const listaMeses = document.getElementById('lista-meses');
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
+    const label = document.createElement('label');
+    label.innerHTML = `<input type="checkbox" data-tipo="mes" data-ano="${d.getFullYear()}" data-mes="${d.getMonth()}"> ${NOMES_MES[d.getMonth()]}/${d.getFullYear()}`;
+    listaMeses.appendChild(label);
   }
 
-  return { desde: inicio.toISOString(), ate: fim.toISOString() };
+  const listaSemanas = document.getElementById('lista-semanas');
+  for (let i = 0; i < 12; i++) {
+    const ref = new Date(Date.now() - i * 7 * 86400000);
+    const seg = segundaDaSemana(ref);
+    const dom = new Date(seg);
+    dom.setDate(seg.getDate() + 6);
+    const rotulo = `${String(seg.getDate()).padStart(2, '0')}/${String(seg.getMonth() + 1).padStart(2, '0')} – ${String(dom.getDate()).padStart(2, '0')}/${String(dom.getMonth() + 1).padStart(2, '0')}`;
+    const label = document.createElement('label');
+    label.innerHTML = `<input type="checkbox" data-tipo="semana" data-inicio="${seg.toISOString()}"> ${rotulo}`;
+    listaSemanas.appendChild(label);
+  }
+
+  const listaAnos = document.getElementById('lista-anos');
+  for (let i = 0; i < 5; i++) {
+    const ano = agora.getFullYear() - i;
+    const label = document.createElement('label');
+    label.innerHTML = `<input type="checkbox" data-tipo="ano" data-ano="${ano}"> ${ano}`;
+    listaAnos.appendChild(label);
+  }
+}
+
+function ligarPopupPeriodo() {
+  popularListasPeriodo();
+
+  document.getElementById('btn-periodo').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const popup = document.getElementById('periodo-popup');
+    if (popup.hidden) abrirPopupPeriodo(); else fecharPopupPeriodo();
+  });
+  document.getElementById('periodo-popup').addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', () => fecharPopupPeriodo());
+  document.getElementById('btn-periodo-cancelar').addEventListener('click', fecharPopupPeriodo);
+
+  document.querySelectorAll('.ae-periodo-opcao').forEach(botao => {
+    botao.addEventListener('click', () => {
+      const preset = PRESETS[botao.dataset.preset];
+      estado.periodos = [preset.calcular()];
+      estado.periodoRotulo = preset.rotulo;
+      document.getElementById('periodo-rotulo').textContent = preset.rotulo;
+      fecharPopupPeriodo();
+      estado.pagina = 1;
+      atualizarTudo();
+    });
+  });
+
+  document.getElementById('btn-periodo-aplicar').addEventListener('click', () => {
+    const periodos = [];
+    document.querySelectorAll('#lista-meses input:checked').forEach(cb => {
+      periodos.push(periodoMes(Number(cb.dataset.ano), Number(cb.dataset.mes)));
+    });
+    document.querySelectorAll('#lista-semanas input:checked').forEach(cb => {
+      periodos.push(periodoSemana(new Date(cb.dataset.inicio)));
+    });
+    document.querySelectorAll('#lista-anos input:checked').forEach(cb => {
+      periodos.push(periodoAno(Number(cb.dataset.ano)));
+    });
+    const desdeCustom = document.getElementById('periodo-custom-desde').value;
+    const ateCustom = document.getElementById('periodo-custom-ate').value;
+    if (desdeCustom && ateCustom) {
+      periodos.push({
+        desde: new Date(desdeCustom + 'T00:00:00').toISOString(),
+        ate: new Date(ateCustom + 'T23:59:59').toISOString()
+      });
+    }
+    if (!periodos.length) { fecharPopupPeriodo(); return; }
+
+    estado.periodos = periodos;
+    estado.periodoRotulo = periodos.length === 1 ? '1 período selecionado' : periodos.length + ' períodos selecionados';
+    document.getElementById('periodo-rotulo').textContent = estado.periodoRotulo;
+    fecharPopupPeriodo();
+    estado.pagina = 1;
+    atualizarTudo();
+  });
 }
 
 // ---------- Logo ----------
@@ -95,9 +240,6 @@ function alternarTema() {
 }
 
 // ---------- Permissão por departamento (Bitrix24) ----------
-// Mostra/oculta as abas de setor na sidebar de acordo com o departamento do
-// usuário logado. Se DEPARTAMENTOS_SETOR estiver vazio (ainda não
-// configurado), libera tudo e avisa, em vez de travar o acesso de todos.
 function aplicarPermissoesSetor(departamentosUsuario) {
   const mapeamentoConfigurado = Object.keys(DEPARTAMENTOS_SETOR).length > 0;
   const avisoEl = document.getElementById('aviso-permissao');
@@ -110,35 +252,24 @@ function aplicarPermissoesSetor(departamentosUsuario) {
 
   avisoEl.hidden = true;
   const setoresPermitidos = new Set(
-    (departamentosUsuario || [])
-      .map(id => DEPARTAMENTOS_SETOR[String(id)])
-      .filter(Boolean)
+    (departamentosUsuario || []).map(id => DEPARTAMENTOS_SETOR[String(id)]).filter(Boolean)
   );
 
   document.querySelectorAll('.ae-sidebar__item[data-tipologia]').forEach(el => {
-    const setor = el.dataset.tipologia;
-    if (setor === '') { el.hidden = false; return; } // "Todos" continua visível
-    el.hidden = !setoresPermitidos.has(setor);
+    el.hidden = !setoresPermitidos.has(el.dataset.tipologia);
   });
 
-  // Se o setor ativo no momento não é mais permitido, volta para "Todos".
   const ativoAtual = document.querySelector('.ae-sidebar__item.is-ativo');
   if (ativoAtual && ativoAtual.hidden) {
-    selecionarSetor('');
+    const primeiroVisivel = document.querySelector('.ae-sidebar__item[data-tipologia]:not([hidden])');
+    if (primeiroVisivel) selecionarSetor(primeiroVisivel.dataset.tipologia);
   }
 }
 
 function verificarPermissoes() {
-  if (!window.BX24 || !BX24.callMethod) {
-    aplicarPermissoesSetor([]);
-    return;
-  }
+  if (!window.BX24 || !BX24.callMethod) { aplicarPermissoesSetor([]); return; }
   BX24.callMethod('user.current', {}, (resultado) => {
-    if (resultado.error()) {
-      console.warn('Não foi possível obter o usuário atual do Bitrix24.', resultado.error());
-      aplicarPermissoesSetor([]);
-      return;
-    }
+    if (resultado.error()) { aplicarPermissoesSetor([]); return; }
     const dados = resultado.data() || {};
     aplicarPermissoesSetor(dados.UF_DEPARTMENT || []);
   });
@@ -148,34 +279,242 @@ function verificarPermissoes() {
 async function chamarApi(path, params) {
   const query = new URLSearchParams({ ...params, api_key: API_KEY }).toString();
   const urlFinal = API_BASE.replace(/\/$/, '') + '/' + path + '?' + query;
-
   const resposta = await fetch(urlFinal, { method: 'GET' });
-
-  if (!resposta.ok) {
-    throw new Error('Falha na API (' + resposta.status + ')');
-  }
+  if (!resposta.ok) throw new Error('Falha na API (' + resposta.status + ')');
   return resposta.json();
 }
 
-// ---------- Renderização: KPIs ----------
-function renderizarKpis(m) {
-  document.getElementById('kpi-criados').textContent = nf.format(m.total_atendimentos || 0);
-  document.getElementById('kpi-score').textContent = m.score_efetividade_medio != null ? nf.format(m.score_efetividade_medio) : '—';
-  document.getElementById('kpi-abertos').textContent = nf.format(m.em_aberto || 0);
-  document.getElementById('kpi-concluidos').textContent = nf.format(m.concluidos || 0);
-  document.getElementById('kpi-falha-critica').textContent = nf.format(m.com_falha_critica || 0);
-  document.getElementById('kpi-sem-resposta').textContent = nf.format(m.sem_resposta_30min_agora || 0);
-  document.getElementById('kpi-insatisfacao').textContent = nf.format(m.insatisfacao_nao_escalada || 0);
+// ---------- Renderizadores de gráfico genéricos ----------
+function renderizarBarrasEmpilhadas(containerId, dados, series, granularidade) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  if (!dados || !dados.length) {
+    el.innerHTML = '<div class="ae-grafico-vazio">Sem dados nesse período.</div>';
+    return;
+  }
+
+  const legenda = document.createElement('div');
+  legenda.className = 'ae-legenda';
+  series.forEach(s => {
+    const item = document.createElement('span');
+    item.className = 'ae-legenda__item';
+    item.innerHTML = `<span class="ae-legenda__cor" style="background:${s.cor}"></span>${escapeHtml(s.rotulo)}`;
+    legenda.appendChild(item);
+  });
+  el.appendChild(legenda);
+
+  const max = Math.max(...dados.map(d => series.reduce((acc, s) => acc + (Number(d[s.chave]) || 0), 0)), 1);
+
+  const barrasWrap = document.createElement('div');
+  barrasWrap.className = 'ae-barras-v';
+  const rotulosWrap = document.createElement('div');
+  rotulosWrap.className = 'ae-barras-v__rotulos';
+
+  dados.forEach(d => {
+    const coluna = document.createElement('div');
+    coluna.className = 'ae-barras-v__coluna';
+    const totalColuna = series.reduce((acc, s) => acc + (Number(d[s.chave]) || 0), 0);
+    coluna.title = formatarBucket(d.bucket, granularidade) + ': ' + totalColuna;
+    series.forEach(s => {
+      const valor = Number(d[s.chave]) || 0;
+      if (!valor) return;
+      const seg = document.createElement('div');
+      seg.className = 'ae-barras-v__segmento';
+      seg.style.background = s.cor;
+      seg.style.height = (valor / max * 100) + '%';
+      coluna.appendChild(seg);
+    });
+    barrasWrap.appendChild(coluna);
+
+    const rot = document.createElement('div');
+    rot.className = 'ae-barras-v__rotulo';
+    rot.textContent = formatarBucket(d.bucket, granularidade);
+    rotulosWrap.appendChild(rot);
+  });
+
+  el.appendChild(barrasWrap);
+  el.appendChild(rotulosWrap);
 }
 
-// ---------- Renderização: estados da tabela ----------
+function renderizarBarrasHorizontais(containerId, dados, campoRotulo, campoValor, formatador) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+  if (!dados || !dados.length) {
+    el.innerHTML = '<div class="ae-grafico-vazio">Sem dados nesse período.</div>';
+    return;
+  }
+  const max = Math.max(...dados.map(d => Number(d[campoValor]) || 0), 1);
+  const wrap = document.createElement('div');
+  wrap.className = 'ae-barras-h';
+  dados.forEach(d => {
+    const valor = Number(d[campoValor]) || 0;
+    const linha = document.createElement('div');
+    linha.className = 'ae-barras-h__linha';
+    linha.innerHTML = `
+      <span class="ae-barras-h__rotulo" title="${escapeHtml(d[campoRotulo])}">${escapeHtml(d[campoRotulo])}</span>
+      <span class="ae-barras-h__trilha"><span class="ae-barras-h__preenchido" style="width:${(valor / max * 100)}%"></span></span>
+      <span class="ae-barras-h__valor">${formatador ? formatador(valor) : nf.format(valor)}</span>
+    `;
+    wrap.appendChild(linha);
+  });
+  el.appendChild(wrap);
+}
+
+// ---------- Dashboard: Comercial ----------
+function renderizarDashboardComercial(dados) {
+  document.getElementById('kpis-setor').innerHTML = `
+    <div class="ae-card ae-kpi-card--mini">
+      <span class="ae-rotulo">Atendimentos criados</span>
+      <span class="ae-numero ae-kpi">${nf.format(dados.kpis.total_criados)}</span>
+    </div>
+    <div class="ae-card ae-kpi-card--mini">
+      <span class="ae-rotulo">Realizados pela IA (transferidos)</span>
+      <span class="ae-numero ae-kpi">${nf.format(dados.kpis.total_transferido_ia)}</span>
+    </div>
+    <div class="ae-card ae-kpi-card--mini ae-kpi-card--alerta">
+      <span class="ae-rotulo">Sem resposta &gt; 1h (agora)</span>
+      <span class="ae-numero ae-kpi">${nf.format(dados.kpis.sem_resposta_60min_agora)}</span>
+    </div>
+    <div class="ae-card ae-kpi-card--mini">
+      <span class="ae-rotulo">Efetividade da IA</span>
+      <span class="ae-numero ae-kpi">${dados.kpis.efetividade_media_pct != null ? nf.format(dados.kpis.efetividade_media_pct) + '%' : '—'}</span>
+    </div>
+  `;
+
+  const mostrarColaborador = estado.colaborador === 'todos';
+  document.getElementById('graficos-setor').innerHTML = `
+    <div class="ae-card ae-grafico-card ae-grafico-card--largo">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Atendimentos ao longo do tempo</h2><p class="ae-apoio">por desfecho</p></div>
+      <div id="grafico-serie-desfecho"></div>
+    </div>
+    <div class="ae-card ae-grafico-card">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Distribuição do score de efetividade</h2></div>
+      <div id="grafico-distribuicao"></div>
+    </div>
+    <div class="ae-card ae-grafico-card">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Critérios de qualificação</h2><p class="ae-apoio">média por critério</p></div>
+      <div id="grafico-criterios"></div>
+    </div>
+    <div class="ae-card ae-grafico-card">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Motivo de falha crítica</h2></div>
+      <div id="grafico-falha-critica"></div>
+    </div>
+    ${mostrarColaborador ? `
+    <div class="ae-card ae-grafico-card">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Volume transferido por colaborador</h2><p class="ae-apoio">volume — o Vigia avalia a Sofia, não o colaborador humano</p></div>
+      <div id="grafico-por-colaborador"></div>
+    </div>` : ''}
+  `;
+
+  renderizarBarrasEmpilhadas('grafico-serie-desfecho', dados.serie_desfecho, [
+    { chave: 'sofia', rotulo: 'Só Sofia', cor: 'var(--ae-r3)' },
+    { chave: 'humano', rotulo: 'Transferido', cor: 'var(--ae-magic-pink)' },
+    { chave: 'automatico', rotulo: 'Automático', cor: 'var(--ae-r1)' }
+  ], dados.granularidade);
+  renderizarBarrasHorizontais('grafico-distribuicao', dados.distribuicao_score, 'faixa', 'quantidade');
+  renderizarBarrasHorizontais('grafico-criterios', dados.criterios, 'criterio', 'media', v => nf.format(v));
+  renderizarBarrasHorizontais('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade');
+  if (mostrarColaborador) {
+    renderizarBarrasHorizontais('grafico-por-colaborador', dados.por_colaborador, 'operador', 'quantidade');
+  }
+}
+
+// ---------- Dashboard: Suporte ----------
+function renderizarDashboardSuporte(dados) {
+  document.getElementById('kpis-setor').innerHTML = `
+    <div class="ae-card ae-kpi-card--mini">
+      <span class="ae-rotulo">Atendimentos criados</span>
+      <span class="ae-numero ae-kpi">${nf.format(dados.kpis.total_criados)}</span>
+    </div>
+    <div class="ae-card ae-kpi-card--mini">
+      <span class="ae-rotulo">Resolvidos só pela IA</span>
+      <span class="ae-numero ae-kpi">${nf.format(dados.kpis.total_resolvido_ia)}</span>
+    </div>
+    <div class="ae-card ae-kpi-card--mini">
+      <span class="ae-rotulo">Pedidos gerados pela IA</span>
+      <span class="ae-numero ae-kpi">${nf.format(dados.kpis.total_pedidos_ia)}</span>
+    </div>
+    <div class="ae-card ae-kpi-card--mini ae-kpi-card--alerta">
+      <span class="ae-rotulo">Sem resposta &gt; 30min (agora)</span>
+      <span class="ae-numero ae-kpi">${nf.format(dados.kpis.sem_resposta_30min_agora)}</span>
+    </div>
+  `;
+
+  const mostrarColaborador = estado.colaborador === 'todos';
+  document.getElementById('graficos-setor').innerHTML = `
+    <div class="ae-card ae-grafico-card ae-grafico-card--largo">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Atendimentos ao longo do tempo</h2><p class="ae-apoio">por resolução</p></div>
+      <div id="grafico-serie-resolucao"></div>
+    </div>
+    <div class="ae-card ae-grafico-card ae-grafico-card--largo">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Pedidos gerados pela IA ao longo do tempo</h2></div>
+      <div id="grafico-serie-pedidos"></div>
+    </div>
+    <div class="ae-card ae-grafico-card">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Pedidos por tipo de ocorrência</h2></div>
+      <div id="grafico-pedidos-tipo"></div>
+    </div>
+    <div class="ae-card ae-grafico-card">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Distribuição do score de efetividade</h2></div>
+      <div id="grafico-distribuicao"></div>
+    </div>
+    <div class="ae-card ae-grafico-card">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Critérios de suporte</h2><p class="ae-apoio">média por critério</p></div>
+      <div id="grafico-criterios"></div>
+    </div>
+    <div class="ae-card ae-grafico-card">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Motivo de falha crítica</h2></div>
+      <div id="grafico-falha-critica"></div>
+    </div>
+    ${mostrarColaborador ? `
+    <div class="ae-card ae-grafico-card">
+      <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Volume com intervenção humana por colaborador</h2><p class="ae-apoio">volume — o Vigia avalia a Sofia, não o colaborador humano</p></div>
+      <div id="grafico-por-colaborador"></div>
+    </div>` : ''}
+  `;
+
+  renderizarBarrasEmpilhadas('grafico-serie-resolucao', dados.serie_resolucao, [
+    { chave: 'ia', rotulo: 'Só IA', cor: 'var(--ae-r3)' },
+    { chave: 'humano', rotulo: 'Com humano', cor: 'var(--ae-magic-pink)' }
+  ], dados.granularidade);
+  renderizarBarrasEmpilhadas('grafico-serie-pedidos', dados.serie_pedidos.map(p => ({ bucket: p.bucket, total: p.quantidade })), [
+    { chave: 'total', rotulo: 'Pedidos', cor: 'var(--ae-magic-pink)' }
+  ], dados.granularidade);
+  renderizarBarrasHorizontais('grafico-pedidos-tipo', dados.pedidos_por_tipo, 'tipo', 'quantidade');
+  renderizarBarrasHorizontais('grafico-distribuicao', dados.distribuicao_score, 'faixa', 'quantidade');
+  renderizarBarrasHorizontais('grafico-criterios', dados.criterios, 'criterio', 'media', v => nf.format(v));
+  renderizarBarrasHorizontais('grafico-falha-critica', dados.falha_critica, 'motivo', 'quantidade');
+  if (mostrarColaborador) {
+    renderizarBarrasHorizontais('grafico-por-colaborador', dados.por_colaborador, 'operador', 'quantidade');
+  }
+}
+
+async function carregarDashboardSetor() {
+  const path = estado.tipologia === 'comercial' ? 'painel-ae-comercial' : 'painel-ae-suporte';
+  try {
+    const dados = await chamarApi(path, {
+      periodos: JSON.stringify(estado.periodos),
+      status: estado.status,
+      colaborador: estado.colaborador
+    });
+    if (estado.tipologia === 'comercial') renderizarDashboardComercial(dados);
+    else renderizarDashboardSuporte(dados);
+  } catch (e) {
+    document.getElementById('kpis-setor').innerHTML = '';
+    document.getElementById('graficos-setor').innerHTML = '<div class="ae-grafico-vazio">Não foi possível carregar as métricas agora.</div>';
+    console.error(e);
+  }
+}
+
+// ---------- Auditoria: tabela de atendimentos ----------
 function renderizarSkeleton() {
   const corpo = document.getElementById('tabela-corpo');
   corpo.innerHTML = '';
   for (let i = 0; i < 5; i++) {
     const tr = document.createElement('tr');
     tr.className = 'ae-linha-skeleton';
-    for (let c = 0; c < 7; c++) {
+    for (let c = 0; c < 8; c++) {
       const td = document.createElement('td');
       td.innerHTML = '<div class="ae-skeleton"></div>';
       tr.appendChild(td);
@@ -183,37 +522,32 @@ function renderizarSkeleton() {
     corpo.appendChild(tr);
   }
 }
-
 function renderizarVazio() {
   const corpo = document.getElementById('tabela-corpo');
   corpo.innerHTML = '';
   const tr = document.createElement('tr');
   const td = document.createElement('td');
   td.colSpan = 8;
-  td.innerHTML = `
-    <div class="ae-vazio">
-      <p class="ae-corpo">Nenhum atendimento avaliado nesse período com esses filtros.</p>
-      <p class="ae-apoio">Tente outro dia, mês ou ano, ou trocar o setor.</p>
-    </div>`;
+  td.innerHTML = `<div class="ae-vazio">
+    <p class="ae-corpo">Nenhum atendimento encontrado nesse período com esses filtros.</p>
+    <p class="ae-apoio">Tente ampliar o período ou trocar os demais filtros.</p>
+  </div>`;
   tr.appendChild(td);
   corpo.appendChild(tr);
 }
-
-function renderizarErro(mensagem) {
+function renderizarErroTabela(mensagem) {
   const corpo = document.getElementById('tabela-corpo');
   corpo.innerHTML = '';
   const tr = document.createElement('tr');
   const td = document.createElement('td');
   td.colSpan = 8;
-  td.innerHTML = `
-    <div class="ae-erro">
-      <p class="ae-corpo">Não foi possível carregar os atendimentos agora.</p>
-      <p class="ae-apoio">${mensagem || 'Tente atualizar em alguns instantes.'}</p>
-    </div>`;
+  td.innerHTML = `<div class="ae-erro">
+    <p class="ae-corpo">Não foi possível carregar os atendimentos agora.</p>
+    <p class="ae-apoio">${escapeHtml(mensagem || 'Tente atualizar em alguns instantes.')}</p>
+  </div>`;
   tr.appendChild(td);
   corpo.appendChild(tr);
 }
-
 function badgeSetor(tipologia) {
   if (tipologia === 'comercial') return '<span class="ae-badge ae-badge--info">Comercial</span>';
   if (tipologia === 'suporte') return '<span class="ae-badge">Suporte</span>';
@@ -226,24 +560,18 @@ function badgeStatus(item) {
 }
 function sinais(item) {
   const chips = [];
-  if (item.falha_critica) chips.push('<span class="ae-badge ae-badge--erro" title="' + item.falha_critica + '">Falha crítica</span>');
+  if (item.falha_critica) chips.push('<span class="ae-badge ae-badge--erro" title="' + escapeHtml(item.falha_critica) + '">Falha crítica</span>');
   if (item.sem_resposta_30min) chips.push('<span class="ae-badge ae-badge--alerta">Sem resposta</span>');
-  if (item.insatisfacao_detectada && !item.insatisfacao_escalada) chips.push('<span class="ae-badge ae-badge--erro">Insatisfação</span>');
   return chips.length ? '<div class="ae-sinais">' + chips.join('') + '</div>' : '—';
 }
-
 function renderizarTabela(dados) {
+  if (!dados.itens || !dados.itens.length) { renderizarVazio(); renderizarPaginacao(dados); return; }
   const corpo = document.getElementById('tabela-corpo');
-  if (!dados.itens || !dados.itens.length) {
-    renderizarVazio();
-    renderizarPaginacao(dados);
-    return;
-  }
   corpo.innerHTML = '';
   for (const item of dados.itens) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${item.contact_name || 'Não informado'}</td>
+      <td>${escapeHtml(item.contact_name || 'Não informado')}</td>
       <td>${badgeSetor(item.tipologia)}</td>
       <td class="ae-numero">${item.started_at ? df.format(new Date(item.started_at)) : '—'}</td>
       <td>${badgeStatus(item)}</td>
@@ -256,7 +584,6 @@ function renderizarTabela(dados) {
   }
   renderizarPaginacao(dados);
 }
-
 function renderizarPaginacao(dados) {
   const el = document.getElementById('paginacao');
   const totalPaginas = Math.max(1, Math.ceil((dados.total || 0) / estado.limite));
@@ -270,187 +597,34 @@ function renderizarPaginacao(dados) {
   if (btnAnt) btnAnt.addEventListener('click', () => { estado.pagina--; carregarAtendimentos(); });
   if (btnProx) btnProx.addEventListener('click', () => { estado.pagina++; carregarAtendimentos(); });
 }
-
-function mostrarToast(mensagem) {
-  const existente = document.querySelector('.ae-toast');
-  if (existente) existente.remove();
-  const toast = document.createElement('div');
-  toast.className = 'ae-toast';
-  toast.textContent = mensagem;
-  document.querySelector('.ae-app').appendChild(toast);
-  setTimeout(() => toast.remove(), 5000);
-}
-
-// ---------- Mapa de calor (volume por dia/mês x horário) ----------
-const BINS_HORA = [
-  { rotulo: '00–03', de: 0, ate: 3 },
-  { rotulo: '04–07', de: 4, ate: 7 },
-  { rotulo: '08–11', de: 8, ate: 11 },
-  { rotulo: '12–15', de: 12, ate: 15 },
-  { rotulo: '16–19', de: 16, ate: 19 },
-  { rotulo: '20–23', de: 20, ate: 23 }
-];
-
-function calcularEixoColunas() {
-  if (estado.modoData === 'dia') {
-    return { tipo: 'hora', colunas: Array.from({ length: 24 }, (_, h) => ({ rotulo: String(h).padStart(2, '0') })) };
-  }
-  if (estado.modoData === 'mes') {
-    const [ano, mes] = estado.valorMes.split('-').map(Number);
-    const ultimoDia = new Date(ano, mes, 0).getDate();
-    return { tipo: 'dia', colunas: Array.from({ length: ultimoDia }, (_, i) => ({ rotulo: String(i + 1) })) };
-  }
-  const nomesMes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  return { tipo: 'mes', colunas: nomesMes.map(n => ({ rotulo: n })) };
-}
-
-function corIntensidade(valor, max) {
-  if (!valor) return 'var(--ae-surface-2)';
-  const t = valor / max;
-  return `rgba(255, 3, 143, ${(0.12 + t * 0.78).toFixed(2)})`;
-}
-
-function renderizarMapaCalor(pontos) {
-  const el = document.getElementById('grafico-mapa-calor');
-  const legenda = document.getElementById('grafico-legenda');
-  el.innerHTML = '';
-
-  if (!pontos.length) {
-    legenda.textContent = 'por dia e horário';
-    el.innerHTML = '<div class="ae-mapa-calor__vazio">Sem atendimentos nesse período para exibir no gráfico.</div>';
-    return;
-  }
-
-  const eixo = calcularEixoColunas();
-
-  // Modo "dia": uma unica linha, colunas = horas do dia.
-  if (eixo.tipo === 'hora') {
-    legenda.textContent = 'por horário do dia';
-    const contagem = new Array(24).fill(0);
-    pontos.forEach(p => { contagem[new Date(p.started_at).getHours()]++; });
-    const max = Math.max(...contagem, 1);
-
-    const linha = document.createElement('div');
-    linha.className = 'ae-mapa-calor__linha';
-    linha.style.gridTemplateColumns = `repeat(${eixo.colunas.length}, 20px)`;
-    eixo.colunas.forEach((col, i) => {
-      const celula = document.createElement('div');
-      celula.className = 'ae-mapa-calor__celula';
-      celula.style.background = corIntensidade(contagem[i], max);
-      celula.title = `${col.rotulo}h — ${contagem[i]} atendimento(s)`;
-      linha.appendChild(celula);
-    });
-    el.appendChild(linha);
-
-    const rotulos = document.createElement('div');
-    rotulos.className = 'ae-mapa-calor__rotulos-coluna';
-    rotulos.style.gridTemplateColumns = `repeat(${eixo.colunas.length}, 20px)`;
-    eixo.colunas.forEach(col => {
-      const r = document.createElement('div'); r.textContent = col.rotulo; rotulos.appendChild(r);
-    });
-    el.appendChild(rotulos);
-    return;
-  }
-
-  // Modo "mes" ou "ano": mapa de calor real - linhas = faixa de horario, colunas = dia ou mes.
-  legenda.textContent = eixo.tipo === 'dia' ? 'por dia do mês e horário' : 'por mês e horário';
-  const matriz = BINS_HORA.map(() => new Array(eixo.colunas.length).fill(0));
-  pontos.forEach(p => {
-    const d = new Date(p.started_at);
-    const hora = d.getHours();
-    const binIdx = BINS_HORA.findIndex(b => hora >= b.de && hora <= b.ate);
-    const colIdx = eixo.tipo === 'dia' ? (d.getDate() - 1) : d.getMonth();
-    if (binIdx >= 0 && colIdx >= 0 && colIdx < eixo.colunas.length) matriz[binIdx][colIdx]++;
-  });
-  const max = Math.max(...matriz.flat(), 1);
-
-  BINS_HORA.forEach((bin, r) => {
-    const linha = document.createElement('div');
-    linha.className = 'ae-mapa-calor__linha';
-    linha.style.gridTemplateColumns = `56px repeat(${eixo.colunas.length}, 20px)`;
-    const rotulo = document.createElement('div');
-    rotulo.className = 'ae-mapa-calor__rotulo-linha';
-    rotulo.textContent = bin.rotulo;
-    linha.appendChild(rotulo);
-    eixo.colunas.forEach((col, c) => {
-      const celula = document.createElement('div');
-      celula.className = 'ae-mapa-calor__celula';
-      celula.style.background = corIntensidade(matriz[r][c], max);
-      celula.title = `${col.rotulo} · ${bin.rotulo}h — ${matriz[r][c]} atendimento(s)`;
-      linha.appendChild(celula);
-    });
-    el.appendChild(linha);
-  });
-
-  const rotulos = document.createElement('div');
-  rotulos.className = 'ae-mapa-calor__rotulos-coluna';
-  rotulos.style.gridTemplateColumns = `56px repeat(${eixo.colunas.length}, 20px)`;
-  rotulos.appendChild(document.createElement('div'));
-  eixo.colunas.forEach(col => {
-    const r = document.createElement('div'); r.textContent = col.rotulo; rotulos.appendChild(r);
-  });
-  el.appendChild(rotulos);
-}
-
-async function carregarSerieTemporal() {
-  const { desde, ate } = calcularPeriodo();
-  try {
-    const dados = await chamarApi('painel-ae-serie-temporal', {
-      desde, ate,
-      ...(estado.tipologia ? { tipologia: estado.tipologia } : {})
-    });
-    renderizarMapaCalor(dados.pontos || []);
-  } catch (e) {
-    document.getElementById('grafico-mapa-calor').innerHTML = '<div class="ae-mapa-calor__vazio">Não foi possível carregar o gráfico agora.</div>';
-    console.error(e);
-  }
-}
-
-// ---------- Carregamento de dados ----------
-async function carregarMetricas() {
-  const { desde, ate } = calcularPeriodo();
-  try {
-    const m = await chamarApi('painel-ae-metricas', {
-      desde, ate,
-      ...(estado.tipologia ? { tipologia: estado.tipologia } : {})
-    });
-    renderizarKpis(m);
-  } catch (e) {
-    mostrarToast('Não foi possível atualizar as métricas.');
-    console.error(e);
-  }
-}
-
 async function carregarAtendimentos() {
   renderizarSkeleton();
-  const { desde, ate } = calcularPeriodo();
   try {
     const dados = await chamarApi('painel-ae-atendimentos', {
-      desde, ate,
+      periodos: JSON.stringify(estado.periodos),
       limite: estado.limite,
       pagina: estado.pagina,
-      ...(estado.tipologia ? { tipologia: estado.tipologia } : {})
+      tipologia: estado.tipologia,
+      status: estado.status,
+      colaborador: estado.colaborador
     });
     renderizarTabela(dados);
   } catch (e) {
-    renderizarErro(e.message);
+    renderizarErroTabela(e.message);
     console.error(e);
   }
   if (window.BX24) BX24.fitWindow();
 }
 
+// ---------- Orquestração ----------
 async function atualizarTudo() {
-  if (estado.secao === 'metricas') {
-    await Promise.all([carregarMetricas(), carregarSerieTemporal()]);
-  } else {
-    await carregarAtendimentos();
-  }
+  if (estado.secao === 'metricas') await carregarDashboardSetor();
+  else await carregarAtendimentos();
   if (window.BX24) BX24.fitWindow();
 }
 
-// ---------- Navegação: setor (sidebar) ----------
 function selecionarSetor(tipologia) {
-  document.querySelectorAll('.ae-sidebar__item').forEach(b => {
+  document.querySelectorAll('.ae-sidebar__item[data-tipologia]').forEach(b => {
     const ativo = b.dataset.tipologia === tipologia;
     b.classList.toggle('is-ativo', ativo);
     b.setAttribute('aria-current', ativo ? 'true' : 'false');
@@ -459,8 +633,6 @@ function selecionarSetor(tipologia) {
   estado.pagina = 1;
   atualizarTudo();
 }
-
-// ---------- Navegação: seção (Métricas x Auditoria) ----------
 function selecionarSecao(secao) {
   document.querySelectorAll('.ae-conteudo > .ae-abas .ae-abas__item').forEach(b => {
     const ativo = b.dataset.secao === secao;
@@ -473,63 +645,25 @@ function selecionarSecao(secao) {
   atualizarTudo();
 }
 
-// ---------- Filtro de data ----------
-function atualizarVisibilidadeInputsData() {
-  document.getElementById('filtro-dia').hidden = estado.modoData !== 'dia';
-  document.getElementById('filtro-mes').hidden = estado.modoData !== 'mes';
-  document.getElementById('filtro-ano').hidden = estado.modoData !== 'ano';
-}
-
-function popularSelectAno() {
-  const select = document.getElementById('filtro-ano');
-  const anoAtual = new Date().getFullYear();
-  select.innerHTML = '';
-  for (let ano = anoAtual; ano >= anoAtual - 5; ano--) {
-    const opt = document.createElement('option');
-    opt.value = String(ano);
-    opt.textContent = String(ano);
-    select.appendChild(opt);
-  }
-  select.value = String(estado.valorAno);
-}
-
-function ligarFiltroData() {
-  document.getElementById('filtro-dia').value = estado.valorDia;
-  document.getElementById('filtro-mes').value = estado.valorMes;
-  popularSelectAno();
-  atualizarVisibilidadeInputsData();
-
-  document.querySelectorAll('.ae-chip-group .ae-chip').forEach(botao => {
-    botao.addEventListener('click', () => {
-      document.querySelectorAll('.ae-chip-group .ae-chip').forEach(b => b.classList.remove('is-ativo'));
-      botao.classList.add('is-ativo');
-      estado.modoData = botao.dataset.modo;
-      atualizarVisibilidadeInputsData();
-      atualizarTudo();
-    });
-  });
-
-  document.getElementById('filtro-dia').addEventListener('change', (e) => {
-    estado.valorDia = e.target.value;
-    atualizarTudo();
-  });
-  document.getElementById('filtro-mes').addEventListener('change', (e) => {
-    estado.valorMes = e.target.value;
-    atualizarTudo();
-  });
-  document.getElementById('filtro-ano').addEventListener('change', (e) => {
-    estado.valorAno = Number(e.target.value);
-    atualizarTudo();
-  });
-}
-
-// ---------- Ligação geral ----------
 function ligarNavegacao() {
-  document.querySelectorAll('.ae-sidebar__item').forEach(botao => {
-    botao.addEventListener('click', () => selecionarSetor(botao.dataset.tipologia || ''));
+  document.querySelectorAll('.ae-sidebar__item[data-tipologia]').forEach(botao => {
+    botao.addEventListener('click', () => selecionarSetor(botao.dataset.tipologia));
   });
   document.querySelectorAll('.ae-conteudo > .ae-abas .ae-abas__item').forEach(botao => {
     botao.addEventListener('click', () => selecionarSecao(botao.dataset.secao));
+  });
+  document.querySelectorAll('[data-colaborador]').forEach(botao => {
+    botao.addEventListener('click', () => {
+      document.querySelectorAll('[data-colaborador]').forEach(b => b.classList.remove('is-ativo'));
+      botao.classList.add('is-ativo');
+      estado.colaborador = botao.dataset.colaborador;
+      atualizarTudo();
+    });
+  });
+  document.getElementById('filtro-status').addEventListener('change', (e) => {
+    estado.status = e.target.value;
+    estado.pagina = 1;
+    atualizarTudo();
   });
   document.getElementById('btn-atualizar').addEventListener('click', atualizarTudo);
   document.getElementById('btn-tema').addEventListener('click', alternarTema);
@@ -538,20 +672,18 @@ function ligarNavegacao() {
 
 // ---------- Inicialização ----------
 function iniciar() {
+  estado.periodos = [PRESETS['mes-atual'].calcular()];
   ajustarCabecalho();
   window.addEventListener('resize', ajustarCabecalho);
   carregarLogos();
   ligarNavegacao();
-  ligarFiltroData();
+  ligarPopupPeriodo();
   verificarPermissoes();
   atualizarTudo();
 }
 
 if (window.BX24) {
-  BX24.init(() => {
-    iniciar();
-    BX24.fitWindow();
-  });
+  BX24.init(() => { iniciar(); BX24.fitWindow(); });
 } else {
   document.addEventListener('DOMContentLoaded', iniciar);
 }
