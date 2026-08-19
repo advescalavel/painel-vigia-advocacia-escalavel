@@ -6,11 +6,9 @@
 // =============================================================================
 
 // ---------- Configuração ----------
-// PLACEHOLDER: troque pela URL base real do webhook do n8n quando o workflow
-// da API estiver publicado (ex.: https://SEU-N8N/webhook).
-const API_BASE = 'PLACEHOLDER_URL_BASE_N8N/webhook';
-// PLACEHOLDER: mesma chave configurada nos nodes "...Autorizado?" da API.
-const API_KEY = 'PLACEHOLDER_CHAVE_COMPARTILHADA_PAINEL';
+const API_BASE = 'https://webhook.prod.advocaciaescalaveldev.shop/webhook';
+
+const API_KEY = 'vigia-ae-k7x9mP2qL8wZ4nR1';
 
 // PLACEHOLDER: mapeamento de ID de departamento do Bitrix24 para setor do
 // painel. Preencha com os IDs reais (Bitrix24 → Empresa → Estrutura da
@@ -36,15 +34,21 @@ function escapeHtml(valor) {
 const estado = {
   tipologia: 'comercial',
   secao: 'metricas',
-  colaborador: 'todos',
+  colaborador: null,
   status: 'todos',
   periodos: [],
-  periodoRotulo: 'Mês atual',
+  periodoRotulo: 'Hoje',
   pagina: 1,
   limite: 25
 };
 
 // ---------- Cálculo de períodos ----------
+function periodoDia(data) {
+  return {
+    desde: new Date(data.getFullYear(), data.getMonth(), data.getDate(), 0, 0, 0, 0).toISOString(),
+    ate: new Date(data.getFullYear(), data.getMonth(), data.getDate(), 23, 59, 59, 999).toISOString()
+  };
+}
 function periodoMes(ano, mes) {
   return {
     desde: new Date(ano, mes, 1, 0, 0, 0, 0).toISOString(),
@@ -90,6 +94,7 @@ function periodoSemana(dataReferencia) {
 }
 
 const PRESETS = {
+  'hoje': { rotulo: 'Hoje', calcular: () => periodoDia(new Date()) },
   'mes-atual': { rotulo: 'Mês atual', calcular: () => { const a = new Date(); return periodoMes(a.getFullYear(), a.getMonth()); } },
   'mes-anterior': {
     rotulo: 'Mês anterior',
@@ -195,6 +200,12 @@ function ligarPopupPeriodo() {
         desde: new Date(desdeCustom + 'T00:00:00').toISOString(),
         ate: new Date(ateCustom + 'T23:59:59').toISOString()
       });
+    } else if (desdeCustom) {
+      // Só o primeiro campo preenchido: trata como um único dia.
+      periodos.push(periodoDia(new Date(desdeCustom + 'T00:00:00')));
+    } else if (ateCustom) {
+      // Só o segundo campo preenchido: mesma lógica, usando essa data.
+      periodos.push(periodoDia(new Date(ateCustom + 'T00:00:00')));
     }
     if (!periodos.length) { fecharPopupPeriodo(); return; }
 
@@ -382,7 +393,7 @@ function renderizarDashboardComercial(dados) {
     </div>
   `;
 
-  const mostrarColaborador = estado.colaborador === 'todos';
+  const mostrarColaborador = estado.colaborador === 'colaboradores';
   document.getElementById('graficos-setor').innerHTML = `
     <div class="ae-card ae-grafico-card ae-grafico-card--largo">
       <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Atendimentos ao longo do tempo</h2><p class="ae-apoio">por desfecho</p></div>
@@ -441,7 +452,7 @@ function renderizarDashboardSuporte(dados) {
     </div>
   `;
 
-  const mostrarColaborador = estado.colaborador === 'todos';
+  const mostrarColaborador = estado.colaborador === 'colaboradores';
   document.getElementById('graficos-setor').innerHTML = `
     <div class="ae-card ae-grafico-card ae-grafico-card--largo">
       <div class="ae-grafico-cabecalho"><h2 class="ae-titulo-secao">Atendimentos ao longo do tempo</h2><p class="ae-apoio">por resolução</p></div>
@@ -496,7 +507,7 @@ async function carregarDashboardSetor() {
     const dados = await chamarApi(path, {
       periodos: JSON.stringify(estado.periodos),
       status: estado.status,
-      colaborador: estado.colaborador
+      ...(estado.colaborador ? { colaborador: estado.colaborador } : {})
     });
     if (estado.tipologia === 'comercial') renderizarDashboardComercial(dados);
     else renderizarDashboardSuporte(dados);
@@ -606,7 +617,7 @@ async function carregarAtendimentos() {
       pagina: estado.pagina,
       tipologia: estado.tipologia,
       status: estado.status,
-      colaborador: estado.colaborador
+      ...(estado.colaborador ? { colaborador: estado.colaborador } : {})
     });
     renderizarTabela(dados);
   } catch (e) {
@@ -654,9 +665,14 @@ function ligarNavegacao() {
   });
   document.querySelectorAll('[data-colaborador]').forEach(botao => {
     botao.addEventListener('click', () => {
+      const jaAtivo = botao.classList.contains('is-ativo');
       document.querySelectorAll('[data-colaborador]').forEach(b => b.classList.remove('is-ativo'));
-      botao.classList.add('is-ativo');
-      estado.colaborador = botao.dataset.colaborador;
+      if (jaAtivo) {
+        estado.colaborador = null; // clicar de novo no que já estava ativo volta ao geral
+      } else {
+        botao.classList.add('is-ativo');
+        estado.colaborador = botao.dataset.colaborador;
+      }
       atualizarTudo();
     });
   });
@@ -672,7 +688,7 @@ function ligarNavegacao() {
 
 // ---------- Inicialização ----------
 function iniciar() {
-  estado.periodos = [PRESETS['mes-atual'].calcular()];
+  estado.periodos = [PRESETS['hoje'].calcular()];
   ajustarCabecalho();
   window.addEventListener('resize', ajustarCabecalho);
   carregarLogos();
